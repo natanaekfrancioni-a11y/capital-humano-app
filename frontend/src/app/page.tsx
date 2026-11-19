@@ -1,69 +1,128 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useEffect, useState } from 'react';
+
+interface Candidato {
+  id: number;
+  nroCandidato: string;
+  apellido: string;
+  nombre: string;
+  tipoDocumento: string;
+  nroDocumento: string;
+  escolaridad?: string;
+  email?: string;
+}
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
+
+export default function HomePage() {
+  const [candidatos, setCandidatos] = useState<Candidato[]>([]);
+  const [apellido, setApellido] = useState('');
+  const [nombre, setNombre] = useState('');
+  const [nroCandidato, setNroCandidato] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  async function cargarCandidatos() {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (apellido.trim()) params.set('apellido', apellido.trim());
+      if (nombre.trim()) params.set('nombre', nombre.trim());
+      if (nroCandidato.trim()) params.set('nroCandidato', nroCandidato.trim());
+
+      const qs = params.toString();
+      const url = `${API_URL}/api/evaluaciones/candidatos${qs ? `?${qs}` : ''}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`Error HTTP ${res.status}`);
+      }
+      const data: Candidato[] = await res.json();
+      setCandidatos(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al cargar candidatos');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    cargarCandidatos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    cargarCandidatos();
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main className="mx-auto max-w-5xl p-6 space-y-6">
+      <header className="space-y-1">
+        <h1 className="text-2xl font-bold">Capital Humano — Candidatos</h1>
+        <p className="text-sm text-gray-500">Conectado a {API_URL}/api/evaluaciones/candidatos</p>
+      </header>
+
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <input
+          type="text"
+          placeholder="Apellido"
+          value={apellido}
+          onChange={(e) => setApellido(e.target.value)}
+          className="rounded border px-3 py-2 text-sm"
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+        <input
+          type="text"
+          placeholder="Nombre"
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          className="rounded border px-3 py-2 text-sm"
+        />
+        <input
+          type="text"
+          placeholder="Nro Candidato (ej. CAND-001)"
+          value={nroCandidato}
+          onChange={(e) => setNroCandidato(e.target.value)}
+          className="rounded border px-3 py-2 text-sm"
+        />
+        <button
+          type="submit"
+          className="rounded bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+        >
+          Buscar
+        </button>
+      </form>
+
+      {loading && <p className="text-sm text-gray-500">Cargando candidatos...</p>}
+      {error && <p className="text-sm text-red-600">Error: {error}</p>}
+
+      {!loading && !error && (
+        <div className="overflow-x-auto rounded border">
+          <table className="min-w-full divide-y text-left text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-2">Nro</th>
+                <th className="px-4 py-2">Apellido y Nombre</th>
+                <th className="px-4 py-2">Documento</th>
+                <th className="px-4 py-2">Escolaridad</th>
+                <th className="px-4 py-2">Email</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {candidatos.map((c) => (
+                <tr key={c.id}>
+                  <td className="px-4 py-2 font-mono">{c.nroCandidato}</td>
+                  <td className="px-4 py-2">{c.apellido}, {c.nombre}</td>
+                  <td className="px-4 py-2">{c.tipoDocumento} {c.nroDocumento}</td>
+                  <td className="px-4 py-2">{c.escolaridad ?? '-'}</td>
+                  <td className="px-4 py-2">{c.email ?? '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      )}
+    </main>
   );
 }
