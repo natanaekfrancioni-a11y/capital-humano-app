@@ -1,0 +1,29 @@
+# Java / Maven / Spring Boot
+api/target/
+api/.mvn/
+api/mvnw
+api/mvnw.cmd
+*.class
+*.jar
+*.war
+*.ear
+*.log
+
+# Next.js / Node
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.env*.local
+npm-debug.log*
+
+# IDEs y Sistema Operativo
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+.DS_Store
+Thumbs.db
+api/src/main/resources/application.properties
