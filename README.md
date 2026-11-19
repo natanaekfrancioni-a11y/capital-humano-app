@@ -13,9 +13,9 @@ Trabajo Práctico Integrador - Diseño de Sistemas de Información & Desarrollo 
 
 ## Requisitos Previos
 
-* Java 17 o superior
+* Java 17+
 * Maven
-* Node.js 18 o superior
+* Node.js 18+
 * Motor de Base de Datos Relacional (PostgreSQL / MySQL)
 
 ---
@@ -23,7 +23,6 @@ Trabajo Práctico Integrador - Diseño de Sistemas de Información & Desarrollo 
 ## Instrucciones de Ejecución Local
 
 ### 1. Base de Datos
-*(Completar con el comando para ejecutar `schema.sql` y `seed.sql`)*
 
 ### 2. Backend (`/api`)
 ```bash
