@@ -48,6 +48,8 @@ mvn spring-boot:run
 
 (o ejecutá `CapitalHumanoApplication` desde IntelliJ). La API queda en `http://localhost:8080`.
 
+Para usar **Generar con IA** (CU033) hace falta además una clave de Gemini: ver la sección de abajo.
+
 Pruebas unitarias (JUnit 5 + Mockito):
 
 ```bash
@@ -71,7 +73,25 @@ La aplicación queda en `http://localhost:3000`. Si la API corre en otra direcci
 |---|---|
 | Ingresar como consultor | Usuario `CONSULTOR1` (o `NFRANCIONI`), cualquier contraseña: la validación contra el LDAP está simulada |
 | Realizar un cuestionario | DNI `35111222`, clave `A8K3M9P2` (cuestionario activo de PEREZ para PROJECT MANAGER TIC) |
-| Orden de mérito y reporte comparativo | Puesto `PUE-PM-01`: SOSA cumple los mínimos, GUTIERREZ no alcanza el de LEALTAD, PEREZ está activo |
+| Orden de mérito y reporte comparativo | Puesto `PUE-PM-01`: SOSA cumple los mínimos (4,75), GUTIERREZ no alcanza el de LEALTAD (3,25), PEREZ está activo |
+| Importar candidatos | `bd/candidatos-prueba.csv` (3 nuevos, 2 actualizados, 1 eliminado) y `bd/candidatos-con-error.csv` (error en la fila 2) |
+
+Las preguntas son las del enunciado más algunas de Arquitectura de Software: 3 por factor, así cada cuestionario sortea 2 distintas. Cada pregunta tiene una opción de respuesta que le corresponde: verdadero o falso, una escala de valoración, una de frecuencia o frases propias de la pregunta, como en el ejemplo de LEALTAD del enunciado.
+
+## Generar preguntas con IA (CU033)
+
+El botón **Generar con IA** del alta de pregunta usa la API de Google Gemini. El backend le envía la competencia, el factor, las preguntas que ya tiene ese factor y las opciones de respuesta cargadas, y la IA propone el nombre, el texto, la descripción, la opción de respuesta y las ponderaciones. No se guarda nada hasta que el consultor revisa los datos y presiona **Aceptar**.
+
+1. Sacá una clave gratuita en [Google AI Studio](https://aistudio.google.com/apikey) con **Create API key**. No actives la facturación: así queda en el plan gratuito.
+2. Agregá esta línea a tu `api/src/main/resources/application.properties` (ese archivo no se sube al repositorio):
+
+   ```properties
+   gemini.api.key=TU_CLAVE
+   ```
+
+3. Reiniciá el backend.
+
+Por defecto se usa el modelo `gemini-3.5-flash-lite`, que en el plan gratuito permite más consultas por día. Para usar otro, agregá `gemini.model=nombre-del-modelo`. Sin clave, o si el servicio falla, la pantalla muestra el mensaje del flujo 4.A ("Ocurrió un error al comunicarse con el servicio de IA...") y debajo la causa: clave inválida, límite de consultas alcanzado, modelo inexistente o sin conexión. En el plan gratuito Google puede usar los pedidos para mejorar sus productos; el sistema solo envía datos del catálogo, nunca datos de candidatos.
 
 ## Pantallas del Frontend
 
@@ -83,7 +103,7 @@ La aplicación queda en `http://localhost:3000`. Si la API corre en otra direcci
 | `/puestos` | CU008 Gestionar puestos (CU009 alta, CU010 modificar, CU011 baja) |
 | `/competencias` | CU012 Gestión de competencias (CU013, CU014, CU015) |
 | `/factores` | CU016 Gestión de factores (CU017, CU018, CU019) |
-| `/preguntas` | CU020 Gestionar preguntas (CU021, CU022, CU023) |
+| `/preguntas` | CU020 Gestionar preguntas (CU021, CU022, CU023 y CU033 desde el alta) |
 | `/opciones-respuesta` | CU024 Gestionar opciones de respuesta (CU029, CU030, CU031) |
 | `/evaluar` | CU025 Evaluar a candidatos |
 | `/cuestionario` | CU026 Completar cuestionario (el candidato entra por `/`) |
@@ -115,9 +135,10 @@ Los errores de negocio responden `400` con `{ "error": "...", "detalles": ["..."
 | CU021 | `POST /api/catalogo/preguntas` (el código se genera si no se envía) |
 | CU022 | `PUT /api/catalogo/preguntas/{id}` |
 | CU023 | `DELETE /api/catalogo/preguntas/{id}?usuario=` |
+| CU033 | `POST /api/catalogo/preguntas/generar-ia` `{ competenciaId, factorId }` (no guarda: devuelve los datos para el alta) |
 | CU024 | `GET /api/catalogo/opciones-respuesta?nombre=` |
 | CU029 | `POST /api/catalogo/opciones-respuesta` |
-| CU030 | `PUT /api/catalogo/opciones-respuesta/{id}` |
+| CU030 | `PUT /api/catalogo/opciones-respuesta/{id}` (cada ítem lleva su `id`: se puede cambiar el orden y la descripción, no agregar ni quitar) |
 | CU031 | `DELETE /api/catalogo/opciones-respuesta/{id}?usuario=` |
 | CU025 | `GET /api/evaluaciones/candidatos?apellido=&nombre=&nroCandidato=` |
 | CU025 | `POST /api/evaluaciones/validar-candidatos` `{ candidatoIds }` (paso 6) |
