@@ -59,66 +59,161 @@ public class EvaluacionCuestionarioService {
                 .toList();
     }
 
+    private static final List<String> ESTADOS_VIGENTES = List.of("ACTIVO", "EN_PROCESO");
+
+    /** CU025 paso 6: candidatos que ya poseen cuestionarios activos o en proceso (6.A). */
+    public List<Candidato> validarCuestionariosActivos(List<Long> candidatoIds) {
+        if (candidatoIds == null || candidatoIds.isEmpty()) {
+            throw new BusinessException("Se debe seleccionar uno o más candidatos");
+        }
+        List<Candidato> conCuestionarioVigente = new ArrayList<>();
+        for (Long candId : new LinkedHashSet<>(candidatoIds)) {
+            if (!cuestionarioDao.findByCandidatoIdAndEstadoIn(candId, ESTADOS_VIGENTES).isEmpty()) {
+                candidatoDao.findById(candId).ifPresent(conCuestionarioVigente::add);
+            }
+        }
+        return conCuestionarioVigente;
+    }
+
+    public record CompetenciaPuestoDTO(
+            Long competenciaId, String codigo, String nombre, BigDecimal ponderacionMinima, boolean evaluable) {}
+
+    /**
+     * CU025 paso 9: competencias del puesto con su ponderación requerida. Una competencia es
+     * evaluable si tiene al menos un factor activo con 2 o más preguntas activas (9.A).
+     */
+    public List<CompetenciaPuestoDTO> obtenerCompetenciasPuesto(Long puestoId) {
+        Puesto puesto = buscarPuestoActivo(puestoId);
+        return puesto.getCompetencias().stream()
+                .sorted(Comparator.comparing(pc -> pc.getCompetencia().getNombre()))
+                .map(pc -> new CompetenciaPuestoDTO(
+                        pc.getCompetencia().getId(),
+                        pc.getCompetencia().getCodigo(),
+                        pc.getCompetencia().getNombre(),
+                        pc.getPonderacionMinima(),
+                        esCompetenciaEvaluable(pc.getCompetencia().getId())))
+                .toList();
+    }
+
+    public record CandidatoClaveDTO(
+            Long candidatoId, String nroCandidato, String apellido, String nombre,
+            String tipoDocumento, String nroDocumento, String claveIngreso) {}
+
+    /**
+     * CU025 pasos 10-11: valida candidatos y puesto, y genera las claves de ingreso que se muestran
+     * antes de confirmar. No guarda nada: los cuestionarios se crean recién al presionar Finalizar.
+     */
+    public List<CandidatoClaveDTO> generarClaves(List<Long> candidatoIds, Long puestoId) {
+        validarSeleccion(candidatoIds, puestoId);
+        validarSinCuestionariosVigentes(candidatoIds);
+        validarCompetenciasEvaluables(buscarPuestoActivo(puestoId));
+
+        List<CandidatoClaveDTO> resultado = new ArrayList<>();
+        Set<String> usadas = new HashSet<>();
+        for (Long candId : new LinkedHashSet<>(candidatoIds)) {
+            Candidato c = candidatoDao.findById(candId)
+                    .orElseThrow(() -> new BusinessException("Candidato no encontrado: " + candId));
+            String clave;
+            do {
+                clave = generarClaveAlfanumerica(8);
+            } while (!usadas.add(clave));
+            resultado.add(new CandidatoClaveDTO(
+                    c.getId(), c.getNroCandidato(), c.getApellido(), c.getNombre(),
+                    c.getTipoDocumento(), c.getNroDocumento(), clave));
+        }
+        return resultado;
+    }
+
     @Transactional
     public List<Cuestionario> generarEvaluaciones(List<Long> candidatoIds, Long puestoId) {
-        if (candidatoIds == null || candidatoIds.isEmpty()) {
-            throw new BusinessException("Debe seleccionar uno o mas candidatos");
-        }
-        if (puestoId == null) {
-            throw new BusinessException("Debe seleccionar una funcion o puesto");
-        }
+        return generarEvaluaciones(candidatoIds, puestoId, null);
+    }
 
-        List<String> bloqueados = new ArrayList<>();
-        for (Long candId : candidatoIds) {
-            List<Cuestionario> activos = cuestionarioDao.findByCandidatoIdAndEstadoIn(candId, List.of("ACTIVO", "EN_PROCESO"));
-            if (!activos.isEmpty()) {
-                Candidato c = candidatoDao.findById(candId).orElse(null);
-                bloqueados.add(c != null ? c.getApellido() + ", " + c.getNombre() : "ID " + candId);
-            }
-        }
-        if (!bloqueados.isEmpty()) {
-            throw new BusinessException(
-                    "Los siguientes candidatos poseen cuestionarios activos o en proceso y no pueden ser evaluados nuevamente: "
-                            + String.join("; ", bloqueados)
-            );
-        }
+    /**
+     * CU025 paso 13: crea un cuestionario en estado ACTIVO por candidato. Si se reciben las claves
+     * mostradas en el paso 11 se usan esas; si no, se generan. Todos los cuestionarios de la
+     * evaluación comparten la misma fecha de creación (así se identifica la evaluación en el CU028).
+     */
+    @Transactional
+    public List<Cuestionario> generarEvaluaciones(List<Long> candidatoIds, Long puestoId, Map<Long, String> claves) {
+        validarSeleccion(candidatoIds, puestoId);
+        validarSinCuestionariosVigentes(candidatoIds);
+        Puesto puesto = buscarPuestoActivo(puestoId);
+        validarCompetenciasEvaluables(puesto);
 
-        Puesto puesto = puestoDao.findById(puestoId)
-                .filter(Puesto::isActivo)
-                .orElseThrow(() -> new BusinessException("Puesto no encontrado"));
-
-        List<String> competenciasNoEvaluables = new ArrayList<>();
-        for (PuestoCompetencia pc : puesto.getCompetencias()) {
-            List<Factor> factores = factorDao.findByCompetenciaIdAndActivoTrueOrderByNroOrdenAsc(pc.getCompetencia().getId());
-            long factoresValidos = factores.stream()
-                    .filter(f -> preguntaDao.findByFactorIdAndActivaTrueOrderByIdAsc(f.getId()).size() >= 2)
-                    .count();
-            if (factoresValidos == 0) {
-                competenciasNoEvaluables.add(pc.getCompetencia().getNombre());
-            }
-        }
-        if (!competenciasNoEvaluables.isEmpty()) {
-            throw new BusinessException(
-                    "Las siguientes competencias no poseen factores con al menos 2 preguntas para ser evaluadas: "
-                            + String.join(", ", competenciasNoEvaluables)
-            );
-        }
-
+        LocalDateTime ahora = LocalDateTime.now();
         List<Cuestionario> creados = new ArrayList<>();
-        for (Long candId : candidatoIds) {
+        for (Long candId : new LinkedHashSet<>(candidatoIds)) {
             Candidato cand = candidatoDao.findById(candId)
                     .orElseThrow(() -> new BusinessException("Candidato no encontrado: " + candId));
+            String claveRecibida = claves == null ? null : claves.get(candId);
             Cuestionario q = new Cuestionario();
             q.setCandidato(cand);
             q.setPuesto(puesto);
-            q.setClaveAcceso(generarClaveAlfanumerica(8));
+            q.setClaveAcceso(esClaveValida(claveRecibida) ? claveRecibida.trim().toUpperCase() : generarClaveAlfanumerica(8));
             q.setEstado("ACTIVO");
             q.setBloqueActual(1);
             q.setCantidadAccesos(0);
-            q.setFechaCreacion(LocalDateTime.now());
+            q.setFechaCreacion(ahora);
             creados.add(cuestionarioDao.save(q));
         }
         return creados;
+    }
+
+    private void validarSeleccion(List<Long> candidatoIds, Long puestoId) {
+        if (candidatoIds == null || candidatoIds.isEmpty()) {
+            throw new BusinessException("Se debe seleccionar uno o más candidatos");
+        }
+        if (puestoId == null) {
+            throw new BusinessException("Se debe seleccionar una función o puesto para realizar la evaluación.");
+        }
+    }
+
+    private void validarSinCuestionariosVigentes(List<Long> candidatoIds) {
+        List<String> bloqueados = validarCuestionariosActivos(candidatoIds).stream()
+                .map(c -> c.getApellido() + ", " + c.getNombre())
+                .toList();
+        if (!bloqueados.isEmpty()) {
+            throw new BusinessException(
+                    "Los siguientes candidatos poseen cuestionarios activos o en proceso y no pueden ser evaluados: "
+                            + String.join("; ", bloqueados) + ".",
+                    bloqueados);
+        }
+    }
+
+    private void validarCompetenciasEvaluables(Puesto puesto) {
+        List<String> competenciasNoEvaluables = puesto.getCompetencias().stream()
+                .filter(pc -> !esCompetenciaEvaluable(pc.getCompetencia().getId()))
+                .map(pc -> pc.getCompetencia().getNombre())
+                .toList();
+        if (!competenciasNoEvaluables.isEmpty()) {
+            throw new BusinessException(
+                    "Las siguientes competencias no poseen factores que cumplan las condiciones para ser evaluadas: "
+                            + String.join(", ", competenciasNoEvaluables) + ".",
+                    competenciasNoEvaluables);
+        }
+    }
+
+    private boolean esCompetenciaEvaluable(Long competenciaId) {
+        return factorDao.findByCompetenciaIdAndActivoTrueOrderByNroOrdenAsc(competenciaId).stream()
+                .anyMatch(f -> preguntaDao.findByFactorIdAndActivaTrueOrderByIdAsc(f.getId()).size() >= 2);
+    }
+
+    private Puesto buscarPuestoActivo(Long puestoId) {
+        if (puestoId == null) {
+            throw new BusinessException("Se debe seleccionar una función o puesto para realizar la evaluación.");
+        }
+        return puestoDao.findById(puestoId)
+                .filter(Puesto::isActivo)
+                .orElseThrow(() -> new BusinessException("Puesto no encontrado"));
+    }
+
+    private boolean esClaveValida(String clave) {
+        if (clave == null) {
+            return false;
+        }
+        String c = clave.trim().toUpperCase();
+        return c.matches("[A-Z0-9]{8}") && c.matches(".*[A-Z].*") && c.matches(".*[0-9].*");
     }
 
     @Transactional
@@ -276,63 +371,6 @@ public BigDecimal calcularPuntajeTotal(Cuestionario cuestionario) {
                 .divide(BigDecimal.valueOf(totalesPorCompetencia.size()), 2, RoundingMode.HALF_UP);
     }
 
-    public Map<String, Object> emitirOrdenDeMerito(Long puestoId) {
-        Puesto puesto = puestoDao.findById(puestoId)
-                .filter(Puesto::isActivo)
-                .orElseThrow(() -> new BusinessException("Puesto no encontrado"));
-
-        List<Cuestionario> todos = cuestionarioDao.findByPuestoIdOrderByIdAsc(puestoId);
-        if (todos.isEmpty()) {
-            throw new BusinessException("El puesto no posee evaluaciones");
-        }
-
-        var ordenMerito = new ArrayList<Map<String, Object>>();
-        var noCumplenMinimos = new ArrayList<Map<String, Object>>();
-        var porEstado = new LinkedHashMap<String, List<Map<String, Object>>>();
-
-        for (Cuestionario q : todos) {
-            Map<String, Object> fila = new LinkedHashMap<>();
-            fila.put("cuestionarioId", q.getId());
-            fila.put("tipoDocumento", q.getCandidato().getTipoDocumento());
-            fila.put("nroDocumento", q.getCandidato().getNroDocumento());
-            fila.put("apellido", q.getCandidato().getApellido());
-            fila.put("nombre", q.getCandidato().getNombre());
-            fila.put("estado", q.getEstado());
-            fila.put("fechaInicio", q.getFechaInicio());
-            fila.put("fechaFin", q.getFechaFin());
-            fila.put("fechaUltimoAcceso", q.getFechaUltimoAcceso());
-            fila.put("cantidadAccesos", q.getCantidadAccesos());
-
-            if ("COMPLETO".equals(q.getEstado())) {
-                BigDecimal puntaje = q.getPuntajeTotal() != null ? q.getPuntajeTotal() : calcularPuntajeTotal(q);
-                fila.put("puntajeObtenido", puntaje);
-
-                boolean cumpleMinimos = puesto.getCompetencias().stream()
-                        .allMatch(pc -> puntaje.compareTo(pc.getPonderacionMinima()) >= 0);
-
-                if (cumpleMinimos) {
-                    ordenMerito.add(fila);
-                } else {
-                    noCumplenMinimos.add(fila);
-                }
-            } else {
-                fila.put("puntajeObtenido", null);
-                porEstado.computeIfAbsent(q.getEstado(), k -> new ArrayList<>()).add(fila);
-            }
-        }
-
-        ordenMerito.sort((a, b) -> ((BigDecimal) b.get("puntajeObtenido")).compareTo((BigDecimal) a.get("puntajeObtenido")));
-
-        Map<String, Object> reporte = new LinkedHashMap<>();
-        reporte.put("puestoCodigo", puesto.getCodigo());
-        reporte.put("puestoNombre", puesto.getNombre());
-        reporte.put("empresa", puesto.getEmpresa());
-        reporte.put("ordenMerito", ordenMerito);
-        reporte.put("noAlcanzanMinimo", noCumplenMinimos);
-        reporte.put("porEstado", porEstado);
-        return reporte;
-    }
-
     public ConfiguracionCuestionario obtenerConfiguracion() {
         return configuracionDao.findAll().stream().findFirst().orElseGet(() -> {
             ConfiguracionCuestionario c = new ConfiguracionCuestionario();
@@ -345,11 +383,16 @@ public BigDecimal calcularPuntajeTotal(Cuestionario cuestionario) {
         });
     }
 
+    /** Requerimiento especial CU025: clave aleatoria de 8 caracteres con letras y dígitos. */
     private String generarClaveAlfanumerica(int longitud) {
-        StringBuilder sb = new StringBuilder(longitud);
-        for (int i = 0; i < longitud; i++) {
-            sb.append(CARACTERES_CLAVE.charAt(RANDOM.nextInt(CARACTERES_CLAVE.length())));
-        }
-        return sb.toString();
+        String clave;
+        do {
+            StringBuilder sb = new StringBuilder(longitud);
+            for (int i = 0; i < longitud; i++) {
+                sb.append(CARACTERES_CLAVE.charAt(RANDOM.nextInt(CARACTERES_CLAVE.length())));
+            }
+            clave = sb.toString();
+        } while (!clave.matches(".*[A-Z].*") || !clave.matches(".*[0-9].*"));
+        return clave;
     }
 }

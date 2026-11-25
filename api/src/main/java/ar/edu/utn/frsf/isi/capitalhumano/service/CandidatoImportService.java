@@ -32,12 +32,17 @@ public class CandidatoImportService {
             throw new BusinessException("El archivo CSV está vacío");
         }
 
-        String[] lineas = contenidoCsv.split("\r?\n");
+        // Requerimiento especial CU006: la primera fila contiene los nombres de las columnas.
+        String[] lineas = contenidoCsv.replace("﻿", "").split("\r?\n");
         List<String> lineasValidas = new ArrayList<>();
-        for (int i = 0; i < lineas.length; i++) {
-            String l = lineas[i].trim();
+        boolean encabezadoOmitido = false;
+        for (String linea : lineas) {
+            String l = linea.trim();
             if (l.isEmpty()) continue;
-            if (i == 0 && l.toLowerCase().contains("nro_candidato")) continue;
+            if (!encabezadoOmitido) {
+                encabezadoOmitido = true;
+                continue;
+            }
             lineasValidas.add(l);
         }
 
@@ -62,9 +67,10 @@ public class CandidatoImportService {
             String tipoDoc = cols[4].trim().toUpperCase();
             String fechaNacStr = cols[5].trim();
             String genero = cols[6].trim().toUpperCase();
+            // Orden de columnas del enunciado: ...;Nacionalidad;Email;Escolaridad;Eliminado
             String nacionalidad = cols[7].trim().toUpperCase();
-            String escolaridad = cols[8].trim().toUpperCase();
-            String email = cols[9].trim();
+            String email = cols[8].trim();
+            String escolaridad = cols[9].trim().toUpperCase();
             String eliminadoStr = cols[10].trim().toLowerCase();
 
             if (nroCandidato.isEmpty() || apellido.isEmpty() || nombre.isEmpty() || nroDoc.isEmpty()) {

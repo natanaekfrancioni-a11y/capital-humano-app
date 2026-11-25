@@ -7,6 +7,8 @@ import ar.edu.utn.frsf.isi.capitalhumano.model.Pregunta;
 import ar.edu.utn.frsf.isi.capitalhumano.model.Puesto;
 import ar.edu.utn.frsf.isi.capitalhumano.service.CatalogoService;
 import ar.edu.utn.frsf.isi.capitalhumano.service.CatalogoService.CompetenciaPuestoInput;
+import ar.edu.utn.frsf.isi.capitalhumano.service.CatalogoService.EnUsoDTO;
+import ar.edu.utn.frsf.isi.capitalhumano.service.CatalogoService.ItemOpcionInput;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -141,6 +143,114 @@ public class CatalogoController {
             @PathVariable Long id,
             @RequestParam(defaultValue = "CONSULTOR") String usuario) {
         catalogoService.darBajaPregunta(id, usuario);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ------------------------------------------------------------------ Competencias (CU013, CU014, CU015)
+
+    public record CompetenciaRequest(String codigo, String nombre, String descripcion, String tipo) {}
+
+    @PostMapping("/competencias")
+    public ResponseEntity<Competencia> crearCompetencia(@RequestBody CompetenciaRequest req) {
+        Competencia creada = catalogoService.crearCompetencia(
+                req.codigo(), req.nombre(), req.descripcion(), req.tipo());
+        return ResponseEntity.status(HttpStatus.CREATED).body(creada);
+    }
+
+    @PutMapping("/competencias/{id}")
+    public ResponseEntity<Competencia> modificarCompetencia(
+            @PathVariable Long id,
+            @RequestBody CompetenciaRequest req) {
+        return ResponseEntity.ok(catalogoService.modificarCompetencia(id, req.nombre(), req.descripcion()));
+    }
+
+    @GetMapping("/competencias/{id}/en-uso")
+    public ResponseEntity<EnUsoDTO> competenciaEnUso(@PathVariable Long id) {
+        return ResponseEntity.ok(catalogoService.verificarUsoCompetencia(id));
+    }
+
+    @DeleteMapping("/competencias/{id}")
+    public ResponseEntity<Void> darBajaCompetencia(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "CONSULTOR") String usuario) {
+        catalogoService.darBajaCompetencia(id, usuario);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ------------------------------------------------------------------ Factores (CU017, CU018, CU019)
+
+    public record FactorRequest(Long competenciaId, String codigo, String nombre, String descripcion, Integer nroOrden) {}
+
+    @PostMapping("/factores")
+    public ResponseEntity<Factor> crearFactor(@RequestBody FactorRequest req) {
+        Factor creado = catalogoService.crearFactor(
+                req.competenciaId(), req.codigo(), req.nombre(), req.descripcion(), req.nroOrden());
+        return ResponseEntity.status(HttpStatus.CREATED).body(creado);
+    }
+
+    @PutMapping("/factores/{id}")
+    public ResponseEntity<Factor> modificarFactor(@PathVariable Long id, @RequestBody FactorRequest req) {
+        return ResponseEntity.ok(catalogoService.modificarFactor(id, req.nombre(), req.descripcion(), req.nroOrden()));
+    }
+
+    @DeleteMapping("/factores/{id}")
+    public ResponseEntity<Void> darBajaFactor(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "CONSULTOR") String usuario) {
+        catalogoService.darBajaFactor(id, usuario);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ------------------------------------------------------------------ Opciones de respuesta (CU029, CU030, CU031)
+
+    public record OpcionRespuestaRequest(String nombre, String descripcion, List<ItemOpcionInput> items) {}
+
+    @PostMapping("/opciones-respuesta")
+    public ResponseEntity<OpcionRespuesta> crearOpcionRespuesta(@RequestBody OpcionRespuestaRequest req) {
+        OpcionRespuesta creada = catalogoService.crearOpcionRespuesta(req.nombre(), req.descripcion(), req.items());
+        return ResponseEntity.status(HttpStatus.CREATED).body(creada);
+    }
+
+    @PutMapping("/opciones-respuesta/{id}")
+    public ResponseEntity<OpcionRespuesta> modificarOpcionRespuesta(
+            @PathVariable Long id,
+            @RequestBody OpcionRespuestaRequest req) {
+        return ResponseEntity.ok(catalogoService.modificarOpcionRespuesta(id, req.descripcion(), req.items()));
+    }
+
+    @DeleteMapping("/opciones-respuesta/{id}")
+    public ResponseEntity<Void> darBajaOpcionRespuesta(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "CONSULTOR") String usuario) {
+        catalogoService.darBajaOpcionRespuesta(id, usuario);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ------------------------------------------------------------------ Puestos (CU010, CU011)
+
+    public record ModificarPuestoRequest(
+            String nombre,
+            String empresa,
+            String descripcion,
+            List<CompetenciaPuestoInput> competencias
+    ) {}
+
+    @PutMapping("/puestos/{id}")
+    public ResponseEntity<Puesto> modificarPuesto(@PathVariable Long id, @RequestBody ModificarPuestoRequest req) {
+        return ResponseEntity.ok(catalogoService.modificarPuesto(
+                id, req.nombre(), req.empresa(), req.descripcion(), req.competencias()));
+    }
+
+    @GetMapping("/puestos/{id}/en-uso")
+    public ResponseEntity<EnUsoDTO> puestoEnUso(@PathVariable Long id) {
+        return ResponseEntity.ok(catalogoService.verificarUsoPuesto(id));
+    }
+
+    @DeleteMapping("/puestos/{id}")
+    public ResponseEntity<Void> darBajaPuesto(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "CONSULTOR") String usuario) {
+        catalogoService.darBajaPuesto(id, usuario);
         return ResponseEntity.noContent().build();
     }
 }

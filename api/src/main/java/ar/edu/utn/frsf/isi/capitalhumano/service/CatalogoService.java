@@ -19,6 +19,7 @@ public class CatalogoService {
     private final PreguntaDao preguntaDao;
     private final PuestoDao puestoDao;
     private final AuditoriaEliminacionDao auditoriaDao;
+    private final CuestionarioDao cuestionarioDao;
 
     public CatalogoService(
             CompetenciaDao competenciaDao,
@@ -26,7 +27,8 @@ public class CatalogoService {
             OpcionRespuestaDao opcionRespuestaDao,
             PreguntaDao preguntaDao,
             PuestoDao puestoDao,
-            AuditoriaEliminacionDao auditoriaDao
+            AuditoriaEliminacionDao auditoriaDao,
+            CuestionarioDao cuestionarioDao
     ) {
         this.competenciaDao = competenciaDao;
         this.factorDao = factorDao;
@@ -34,7 +36,11 @@ public class CatalogoService {
         this.preguntaDao = preguntaDao;
         this.puestoDao = puestoDao;
         this.auditoriaDao = auditoriaDao;
+        this.cuestionarioDao = cuestionarioDao;
     }
+
+    /** Resultado de la verificación previa a una baja (CU011 y CU015, paso 2). */
+    public record EnUsoDTO(boolean enUso, String mensaje) {}
 
     public List<Competencia> buscarCompetencias(String nombre) {
         if (nombre == null || nombre.isBlank()) {
@@ -103,18 +109,30 @@ public class CatalogoService {
                 .filter(Competencia::isActiva)
                 .orElseThrow(() -> new BusinessException("Competencia no encontrada"));
 
-        boolean tieneFactores = !factorDao.findByCompetenciaIdAndActivoTrueOrderByNroOrdenAsc(id).isEmpty();
-        boolean enUsoEnPuesto = puestoDao.findByActivoTrueOrderByNombreAsc().stream()
-                .flatMap(p -> p.getCompetencias().stream())
-                .anyMatch(pc -> pc.getCompetencia().getId().equals(id));
-
-        if (tieneFactores || enUsoEnPuesto) {
-            throw new BusinessException("La competencia " + c.getNombre() + " está siendo usada en la base de datos y no puede eliminarse");
+        EnUsoDTO uso = verificarUsoCompetencia(id);
+        if (uso.enUso()) {
+            throw new BusinessException(uso.mensaje());
         }
 
         c.setActiva(false);
         competenciaDao.save(c);
         registrarAuditoria("COMPETENCIA", c.getId(), c.getNombre(), usuarioActor, "Baja lógica de competencia");
+    }
+
+    /** CU015 paso 2: la competencia está en uso si tiene factores o está asociada a un puesto. */
+    public EnUsoDTO verificarUsoCompetencia(Long id) {
+        Competencia c = competenciaDao.findById(id)
+                .filter(Competencia::isActiva)
+                .orElseThrow(() -> new BusinessException("Competencia no encontrada"));
+        boolean tieneFactores = !factorDao.findByCompetenciaIdAndActivoTrueOrderByNroOrdenAsc(id).isEmpty();
+        boolean enUsoEnPuesto = puestoDao.findByActivoTrueOrderByNombreAsc().stream()
+                .flatMap(p -> p.getCompetencias().stream())
+                .anyMatch(pc -> pc.getCompetencia().getId().equals(id));
+        if (tieneFactores || enUsoEnPuesto) {
+            return new EnUsoDTO(true, "La competencia " + c.getNombre()
+                    + " está siendo usada en la base de datos y no puede eliminarse");
+        }
+        return new EnUsoDTO(false, "Los datos de la competencia " + c.getNombre() + " serán eliminados del sistema");
     }
 
     public List<Factor> buscarFactores(Long competenciaId, String nombre) {
@@ -307,7 +325,6 @@ public class CatalogoService {
 
         if (factorId == null) errores.add("El factor es obligatorio");
         if (opcionRespuestaId == null) errores.add("La opción de respuesta es obligatoria");
-        if (cod.isEmpty()) errores.add("El código es obligatorio");
         if (nom.isEmpty()) errores.add("El nombre de pregunta es obligatorio");
         if (enun.isEmpty()) errores.add("El enunciado de pregunta es obligatorio");
         if (cod.length() > 30) errores.add("El código excede la longitud máxima de 30 caracteres");
@@ -325,8 +342,19 @@ public class CatalogoService {
                 .filter(OpcionRespuesta::isActiva)
                 .orElseThrow(() -> new BusinessException("Opción de respuesta no encontrada"));
 
+        // CU021 2.C: la existencia se valida por nombre y por el texto de la pregunta
         if (preguntaDao.existsByFactorIdAndNombreIgnoreCaseAndActivaTrue(factorId, nom)) {
-            throw new BusinessException("La pregunta ya existe definida para esa competencia y factor");
+            throw new BusinessException("Ya se encuentra registrada una pregunta con el mismo nombre para la "
+                    + "combinación de competencia y factor seleccionada.");
+        }
+        if (preguntaDao.existsByFactorIdAndEnunciadoIgnoreCaseAndActivaTrue(factorId, enun)) {
+            throw new BusinessException("Ya se encuentra registrada una pregunta con el mismo texto para la "
+                    + "combinación de competencia y factor seleccionada.");
+        }
+        if (cod.isEmpty()) {
+            cod = generarCodigoPregunta(factor);
+        } else if (preguntaDao.findByCodigoIgnoreCase(cod).isPresent()) {
+            throw new BusinessException("El código de pregunta " + cod + " ya existe");
         }
 
         Map<Long, BigDecimal> pondFinal = normalizarYValidarPonderaciones(op, ponderaciones);
@@ -511,6 +539,161 @@ public class CatalogoService {
         return puestoDao.save(puesto);
     }
 
+    // ------------------------------------------------------------------ Factores (CU018)
+
+    @Transactional
+    public Factor modificarFactor(Long id, String nombre, String descripcion, Integer nroOrden) {
+        Factor f = factorDao.findById(id)
+                .filter(Factor::isActivo)
+                .orElseThrow(() -> new BusinessException("Factor no encontrado"));
+
+        List<String> errores = new ArrayList<>();
+        String nom = normUpper(nombre);
+        String desc = normUpper(descripcion);
+        if (nom.isEmpty()) errores.add("El nombre es obligatorio");
+        if (desc.isEmpty()) errores.add("La descripción es obligatoria");
+        if (nroOrden == null || nroOrden <= 0) errores.add("El número de orden debe ser mayor a 0");
+        if (!errores.isEmpty()) {
+            throw new BusinessException("Datos incompletos al modificar factor", errores);
+        }
+
+        Long competenciaId = f.getCompetencia().getId();
+        boolean nombreRepetido = factorDao.findByCompetenciaIdAndActivoTrueOrderByNroOrdenAsc(competenciaId).stream()
+                .anyMatch(otro -> !otro.getId().equals(id) && otro.getNombre().equalsIgnoreCase(nom));
+        if (nombreRepetido) {
+            throw new BusinessException("El nombre de factor ya existe para la competencia seleccionada");
+        }
+        boolean ordenRepetido = factorDao.findByCompetenciaIdAndActivoTrueOrderByNroOrdenAsc(competenciaId).stream()
+                .anyMatch(otro -> !otro.getId().equals(id) && otro.getNroOrden().equals(nroOrden));
+        if (ordenRepetido) {
+            throw new BusinessException("El número de orden ya existe para la competencia seleccionada");
+        }
+
+        f.setNombre(nom);
+        f.setDescripcion(desc);
+        f.setNroOrden(nroOrden);
+        return factorDao.save(f);
+    }
+
+    // ------------------------------------------------------------------ Opciones de respuesta (CU031)
+
+    @Transactional
+    public void darBajaOpcionRespuesta(Long id, String usuarioActor) {
+        OpcionRespuesta op = opcionRespuestaDao.findById(id)
+                .filter(OpcionRespuesta::isActiva)
+                .orElseThrow(() -> new BusinessException("Opción de respuesta no encontrada"));
+        if (preguntaDao.existsByOpcionRespuestaIdAndActivaTrue(id)) {
+            throw new BusinessException("La opción de respuesta " + op.getNombre()
+                    + " está siendo usada en la base de datos y no puede eliminarse");
+        }
+        op.setActiva(false);
+        opcionRespuestaDao.save(op);
+        registrarAuditoria("OPCION_RESPUESTA", op.getId(), op.getNombre(), usuarioActor, "Baja lógica de opción de respuesta");
+    }
+
+    // ------------------------------------------------------------------ Puestos (CU010 y CU011)
+
+    @Transactional
+    public Puesto modificarPuesto(
+            Long id,
+            String nombre,
+            String empresa,
+            String descripcion,
+            List<CompetenciaPuestoInput> competencias
+    ) {
+        Puesto puesto = puestoDao.findById(id)
+                .filter(Puesto::isActivo)
+                .orElseThrow(() -> new BusinessException("Puesto no encontrado"));
+
+        List<String> errores = new ArrayList<>();
+        String nom = normUpper(nombre);
+        String emp = normUpper(empresa);
+        String desc = normUpper(descripcion);
+        if (nom.isEmpty()) errores.add("El nombre del puesto es obligatorio");
+        if (emp.isEmpty()) errores.add("La empresa es obligatoria");
+        if (desc.isEmpty()) errores.add("La descripción es obligatoria");
+        if (competencias == null || competencias.isEmpty()) errores.add("Debe asociar al menos una competencia");
+        if (!errores.isEmpty()) {
+            throw new BusinessException("Datos incompletos al modificar puesto", errores);
+        }
+
+        puestoDao.findByNombreIgnoreCase(nom)
+                .filter(otro -> !otro.getId().equals(id) && otro.isActivo())
+                .ifPresent(otro -> {
+                    throw new BusinessException("El nombre del puesto ya existe");
+                });
+
+        Map<Long, BigDecimal> nuevas = new LinkedHashMap<>();
+        for (CompetenciaPuestoInput cp : competencias) {
+            if (cp.competenciaId() == null || nuevas.containsKey(cp.competenciaId())) {
+                throw new BusinessException("Cada competencia puede existir una sola vez para cada puesto");
+            }
+            if (cp.ponderacionMinima() == null
+                    || cp.ponderacionMinima().compareTo(BigDecimal.ZERO) < 0
+                    || cp.ponderacionMinima().compareTo(BigDecimal.TEN) > 0) {
+                throw new BusinessException("Las ponderaciones son valores entre 0 y 10");
+            }
+            nuevas.put(cp.competenciaId(), cp.ponderacionMinima());
+        }
+
+        Set<Long> actuales = new HashSet<>();
+        for (PuestoCompetencia pc : puesto.getCompetencias()) {
+            actuales.add(pc.getCompetencia().getId());
+        }
+        if (!actuales.equals(nuevas.keySet()) && cuestionarioDao.existsByPuestoId(id)) {
+            throw new BusinessException("No es posible agregar o quitar competencias porque ya existen "
+                    + "cuestionarios generados para el puesto");
+        }
+
+        // Se modifica la misma colección (orphanRemoval): se quitan, actualizan y agregan solo las diferencias.
+        puesto.getCompetencias().removeIf(pc -> !nuevas.containsKey(pc.getCompetencia().getId()));
+        for (PuestoCompetencia pc : puesto.getCompetencias()) {
+            pc.setPonderacionMinima(nuevas.get(pc.getCompetencia().getId()));
+        }
+        for (Map.Entry<Long, BigDecimal> e : nuevas.entrySet()) {
+            if (!actuales.contains(e.getKey())) {
+                Competencia comp = competenciaDao.findById(e.getKey())
+                        .filter(Competencia::isActiva)
+                        .orElseThrow(() -> new BusinessException("Competencia no encontrada: " + e.getKey()));
+                PuestoCompetencia pc = new PuestoCompetencia();
+                pc.setPuesto(puesto);
+                pc.setCompetencia(comp);
+                pc.setPonderacionMinima(e.getValue());
+                puesto.getCompetencias().add(pc);
+            }
+        }
+
+        puesto.setNombre(nom);
+        puesto.setEmpresa(emp);
+        puesto.setDescripcion(desc);
+        return puestoDao.save(puesto);
+    }
+
+    /** CU011 paso 2: el puesto está en uso si tiene evaluaciones (cuestionarios) asociadas. */
+    public EnUsoDTO verificarUsoPuesto(Long id) {
+        Puesto puesto = puestoDao.findById(id)
+                .filter(Puesto::isActivo)
+                .orElseThrow(() -> new BusinessException("Puesto no encontrado"));
+        if (cuestionarioDao.existsByPuestoId(id)) {
+            return new EnUsoDTO(true, "El puesto " + puesto.getNombre()
+                    + " está siendo usado en la base de datos y no puede eliminarse");
+        }
+        return new EnUsoDTO(false, "Los datos del puesto " + puesto.getNombre() + " serán eliminados del sistema");
+    }
+
+    @Transactional
+    public void darBajaPuesto(Long id, String usuarioActor) {
+        EnUsoDTO uso = verificarUsoPuesto(id);
+        if (uso.enUso()) {
+            throw new BusinessException(uso.mensaje());
+        }
+        Puesto puesto = puestoDao.findById(id)
+                .orElseThrow(() -> new BusinessException("Puesto no encontrado"));
+        puesto.setActivo(false);
+        puestoDao.save(puesto);
+        registrarAuditoria("PUESTO", puesto.getId(), puesto.getNombre(), usuarioActor, "Baja lógica de puesto");
+    }
+
     private void registrarAuditoria(String entidad, Long entidadId, String identificador, String usuarioActor, String detalle) {
         AuditoriaEliminacion aud = new AuditoriaEliminacion();
         aud.setEntidad(entidad);
@@ -520,6 +703,20 @@ public class CatalogoService {
         aud.setFechaHora(LocalDateTime.now());
         aud.setDetalle(detalle);
         auditoriaDao.save(aud);
+    }
+
+    /** El alta de pregunta del enunciado no pide código: se arma a partir del factor (PREG-GP-01-03). */
+    private String generarCodigoPregunta(Factor factor) {
+        String base = "PREG-" + factor.getCodigo().replaceFirst("^FAC-", "");
+        if (base.length() > 26) {
+            base = base.substring(0, 26);
+        }
+        long nro = preguntaDao.countByFactorId(factor.getId()) + 1;
+        String codigo;
+        do {
+            codigo = base + "-" + String.format("%02d", nro++);
+        } while (preguntaDao.findByCodigoIgnoreCase(codigo).isPresent());
+        return codigo;
     }
 
     private String normUpper(String s) {

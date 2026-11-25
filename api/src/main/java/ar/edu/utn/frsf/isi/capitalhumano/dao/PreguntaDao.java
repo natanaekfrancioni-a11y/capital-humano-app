@@ -10,4 +10,7 @@ public interface PreguntaDao extends JpaRepository<Pregunta, Long> {
     List<Pregunta> findByFactorIdAndActivaTrueOrderByIdAsc(Long factorId);
     Optional<Pregunta> findByCodigoIgnoreCase(String codigo);
     boolean existsByFactorIdAndNombreIgnoreCaseAndActivaTrue(Long factorId, String nombre);
+    boolean existsByFactorIdAndEnunciadoIgnoreCaseAndActivaTrue(Long factorId, String enunciado);
+    boolean existsByOpcionRespuestaIdAndActivaTrue(Long opcionRespuestaId);
+    long countByFactorId(Long factorId);
 }

@@ -151,3 +151,56 @@ FROM (
 ) AS v(nro_cand, cod_pue, clave, estado, bloque_actual, accesos, f_inicio, f_ultimo, f_fin, puntaje)
 JOIN candidato cand ON cand.nro_candidato = v.nro_cand
 JOIN puesto pue ON pue.codigo = v.cod_pue;
+
+-- ----------------------------------------------------------------------------
+-- Respuestas de los cuestionarios COMPLETOS de ejemplo (necesarias para CU027 y CU028).
+-- 2 preguntas por factor y bloques de 2 preguntas (preguntas_por_bloque = 2).
+--   CAND-002 SOSA:      GP 5.50 / LE 5.00 -> 5.25 (alcanza los mínimos del puesto)
+--   CAND-003 GUTIERREZ: GP 3.00 / LE 1.00 -> 2.00 (no alcanza el mínimo de LEALTAD)
+-- ----------------------------------------------------------------------------
+INSERT INTO pregunta_cuestionario (
+    cuestionario_id, pregunta_id, factor_id, competencia_id, nro_bloque, orden_visual, respondida
+)
+SELECT q.id, p.id, f.id, f.competencia_id, v.nro_bloque, v.orden_visual, TRUE
+FROM (
+    VALUES
+        ('CAND-002', 'PREG-GP-01', 1, 1), ('CAND-002', 'PREG-LE-03', 1, 2),
+        ('CAND-002', 'PREG-GP-04', 2, 3), ('CAND-002', 'PREG-LE-01', 2, 4),
+        ('CAND-002', 'PREG-GP-02', 3, 5), ('CAND-002', 'PREG-LE-04', 3, 6),
+        ('CAND-002', 'PREG-GP-03', 4, 7), ('CAND-002', 'PREG-LE-02', 4, 8),
+        ('CAND-003', 'PREG-LE-02', 1, 1), ('CAND-003', 'PREG-GP-03', 1, 2),
+        ('CAND-003', 'PREG-LE-04', 2, 3), ('CAND-003', 'PREG-GP-01', 2, 4),
+        ('CAND-003', 'PREG-GP-02', 3, 5), ('CAND-003', 'PREG-LE-01', 3, 6),
+        ('CAND-003', 'PREG-LE-03', 4, 7), ('CAND-003', 'PREG-GP-04', 4, 8)
+) AS v(nro_cand, preg_codigo, nro_bloque, orden_visual)
+JOIN candidato cand ON cand.nro_candidato = v.nro_cand
+JOIN cuestionario q ON q.candidato_id = cand.id AND q.estado = 'COMPLETO'
+JOIN pregunta p ON p.codigo = v.preg_codigo
+JOIN factor f ON f.id = p.factor_id;
+
+INSERT INTO respuesta_cuestionario (
+    pregunta_cuestionario_id, detalle_opcion_respuesta_id, ponderacion_obtenida, respondida_en
+)
+SELECT pq.id, d.id, pop.ponderacion, q.fecha_fin
+FROM (
+    VALUES
+        ('CAND-002', 'PREG-GP-01', 'EXCELENTE'), ('CAND-002', 'PREG-GP-02', 'VERDADERO'),
+        ('CAND-002', 'PREG-GP-03', 'MUY BUENO'), ('CAND-002', 'PREG-GP-04', 'VERDADERO'),
+        ('CAND-002', 'PREG-LE-01', 'EXCELENTE'), ('CAND-002', 'PREG-LE-02', 'MUY BUENO'),
+        ('CAND-002', 'PREG-LE-03', 'EXCELENTE'), ('CAND-002', 'PREG-LE-04', 'VERDADERO'),
+        ('CAND-003', 'PREG-GP-01', 'BUENO'),     ('CAND-003', 'PREG-GP-02', 'VERDADERO'),
+        ('CAND-003', 'PREG-GP-03', 'REGULAR'),   ('CAND-003', 'PREG-GP-04', 'FALSO'),
+        ('CAND-003', 'PREG-LE-01', 'REGULAR'),   ('CAND-003', 'PREG-LE-02', 'MALO'),
+        ('CAND-003', 'PREG-LE-03', 'BUENO'),     ('CAND-003', 'PREG-LE-04', 'FALSO')
+) AS v(nro_cand, preg_codigo, respuesta)
+JOIN candidato cand ON cand.nro_candidato = v.nro_cand
+JOIN cuestionario q ON q.candidato_id = cand.id AND q.estado = 'COMPLETO'
+JOIN pregunta p ON p.codigo = v.preg_codigo
+JOIN pregunta_cuestionario pq ON pq.cuestionario_id = q.id AND pq.pregunta_id = p.id
+JOIN detalle_opcion_respuesta d ON d.opcion_respuesta_id = p.opcion_respuesta_id AND d.descripcion = v.respuesta
+JOIN ponderacion_opcion_pregunta pop ON pop.pregunta_id = p.id AND pop.detalle_opcion_respuesta_id = d.id;
+
+UPDATE cuestionario q
+SET puntaje_total = v.puntaje, bloque_actual = 4
+FROM (VALUES ('CAND-002', 5.25), ('CAND-003', 2.00)) AS v(nro_cand, puntaje), candidato cand
+WHERE cand.nro_candidato = v.nro_cand AND q.candidato_id = cand.id AND q.estado = 'COMPLETO';
