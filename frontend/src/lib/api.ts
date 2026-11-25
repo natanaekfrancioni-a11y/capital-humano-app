@@ -11,6 +11,7 @@ import type {
   Factor,
   OpcionRespuesta,
   Pregunta,
+  PreguntaGenerada,
   Puesto,
   PuestoResumen,
   ReporteComparativo,
@@ -115,7 +116,7 @@ export const api = {
     pedir<OpcionRespuesta>('POST', '/api/catalogo/opciones-respuesta', { cuerpo: datos }),
   modificarOpcionRespuesta: (
     id: number,
-    datos: { descripcion: string; items: { nroOrden: number; descripcion: string }[] },
+    datos: { descripcion: string; items: { id?: number; nroOrden: number; descripcion: string }[] },
   ) => pedir<OpcionRespuesta>('PUT', `/api/catalogo/opciones-respuesta/${id}`, { cuerpo: datos }),
   bajaOpcionRespuesta: (id: number, usuario: string) =>
     pedir<void>('DELETE', `/api/catalogo/opciones-respuesta/${id}`, { consulta: { usuario } }),
@@ -166,6 +167,10 @@ export const api = {
   ) => pedir<Pregunta>('PUT', `/api/catalogo/preguntas/${id}`, { cuerpo: datos }),
   bajaPregunta: (id: number, usuario: string) =>
     pedir<void>('DELETE', `/api/catalogo/preguntas/${id}`, { consulta: { usuario } }),
+
+  // CU033
+  generarPreguntaIA: (competenciaId: number, factorId: number) =>
+    pedir<PreguntaGenerada>('POST', '/api/catalogo/preguntas/generar-ia', { cuerpo: { competenciaId, factorId } }),
 
   // CU025
   buscarCandidatos: (filtros: { apellido?: string; nombre?: string; nroCandidato?: string }) =>

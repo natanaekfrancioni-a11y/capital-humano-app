@@ -10,3 +10,9 @@ spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
 # Hibernate / JPA
 spring.jpa.hibernate.ddl-auto=validate
 spring.jpa.show-sql=true
+
+# CU033 - Generar pregunta con IA (Google Gemini)
+# Clave personal y gratuita: https://aistudio.google.com/apikey (no la subas al repositorio).
+gemini.api.key=
+# Modelo (opcional). Por defecto: gemini-3.5-flash-lite
+# gemini.model=gemini-3.5-flash-lite

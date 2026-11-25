@@ -64,6 +64,18 @@ export interface Pregunta {
   ponderacionesPorDetalle: Record<string, number>;
 }
 
+/** CU033: datos que propone la IA para completar el alta de una pregunta. */
+export interface PreguntaGenerada {
+  competenciaId: number;
+  factorId: number;
+  nombre: string;
+  enunciado: string;
+  descripcion: string | null;
+  opcionRespuestaId: number;
+  /** clave: id del ítem de la opción de respuesta. Vacío si la IA no propuso ponderaciones válidas. */
+  ponderaciones: Record<string, number>;
+}
+
 export interface PuestoCompetencia {
   id: number;
   competencia: Competencia;

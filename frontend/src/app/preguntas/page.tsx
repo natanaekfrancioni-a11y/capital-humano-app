@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { GenerarConIA } from '@/components/catalogo/GenerarConIA';
 import { Ponderaciones, sumaPonderaciones } from '@/components/catalogo/Ponderaciones';
 import { PantallaConsultor } from '@/components/shell/PantallaConsultor';
 import { useSalir } from '@/components/shell/useSalir';
@@ -12,7 +13,7 @@ import { Grilla } from '@/components/ui/Grilla';
 import { AvisoErrores, BarraAcciones, Hoja, type ErroresFormulario } from '@/components/ui/Hoja';
 import { ApiError, api } from '@/lib/api';
 import { aNumero, puntaje } from '@/lib/formato';
-import type { Competencia, Factor, OpcionRespuesta, Pregunta } from '@/lib/tipos';
+import type { Competencia, Factor, OpcionRespuesta, Pregunta, PreguntaGenerada } from '@/lib/tipos';
 import { validar } from '@/lib/validacion';
 
 type Modo = { tipo: 'gestion' } | { tipo: 'alta' } | { tipo: 'modificar'; pregunta: Pregunta };
@@ -258,6 +259,9 @@ function FormularioPregunta({ pregunta, competencias, opciones, alTerminar }: Fo
   const [errores, setErrores] = useState<ErroresFormulario | null>(null);
   const [porCampo, setPorCampo] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
+  const [iaAbierta, setIaAbierta] = useState(false);
+  /** Aviso después de usar CU033: si la IA propuso ponderaciones válidas o hay que cargarlas. */
+  const [avisoIA, setAvisoIA] = useState<{ conPonderaciones: boolean } | null>(null);
 
   useVolver(useCallback(() => alTerminar(false), [alTerminar]));
 
@@ -291,6 +295,24 @@ function FormularioPregunta({ pregunta, competencias, opciones, alTerminar }: Fo
     setPonderaciones({});
     setErrores(null);
     setPorCampo({});
+    setAvisoIA(null);
+  }
+
+  // CU033 paso 4: se cargan los datos que devolvió el servicio de IA y se vuelve al paso 2 de CU021.
+  function aplicarGenerada(g: PreguntaGenerada, factoresCompetencia: Factor[]) {
+    const ponds = Object.entries(g.ponderaciones);
+    setCompetenciaId(String(g.competenciaId));
+    if (factoresCompetencia.length) setFactores(factoresCompetencia);
+    setFactorId(String(g.factorId));
+    setNombre(g.nombre);
+    setEnunciado(g.enunciado);
+    setDescripcion(g.descripcion ?? '');
+    setOpcionId(String(g.opcionRespuestaId));
+    setPonderaciones(Object.fromEntries(ponds.map(([id, v]) => [Number(id), String(v).replace('.', ',')])));
+    setErrores(null);
+    setPorCampo({});
+    setIaAbierta(false);
+    setAvisoIA({ conPonderaciones: ponds.length > 0 });
   }
 
   function validarPonderaciones(): string | null {
@@ -367,6 +389,14 @@ function FormularioPregunta({ pregunta, competencias, opciones, alTerminar }: Fo
     >
       <form onSubmit={aceptar} noValidate>
         <AvisoErrores titulo={errores?.titulo ?? null} items={errores?.items} refAviso={avisoRef} />
+        {avisoIA && !errores && (
+          <p role="status" className="mb-6 border-l-4 border-cumple bg-[#eef5f0] px-4 py-3 text-cuerpo text-grafito">
+            <strong className="font-bold text-cumple">Pregunta generada con IA.</strong>{' '}
+            {avisoIA.conPonderaciones
+              ? 'Revise el texto, la opción de respuesta y las ponderaciones antes de aceptar.'
+              : 'Revise el texto y cargue las ponderaciones de cada opción antes de aceptar.'}
+          </p>
+        )}
 
         <div className="grid gap-5 md:grid-cols-2">
           <CampoSeleccion
@@ -445,7 +475,7 @@ function FormularioPregunta({ pregunta, competencias, opciones, alTerminar }: Fo
           izquierda={
             <>
               {esAlta && (
-                <Boton variante="secundario" disabled title="Generar con IA (CU033) todavía no está disponible">
+                <Boton variante="secundario" onClick={() => setIaAbierta(true)}>
                   Generar con IA
                 </Boton>
               )}
@@ -461,6 +491,16 @@ function FormularioPregunta({ pregunta, competencias, opciones, alTerminar }: Fo
           }
         />
       </form>
+
+      {iaAbierta && (
+        <GenerarConIA
+          competencias={competencias}
+          competenciaInicial={competenciaId}
+          factorInicial={factorId}
+          alCancelar={() => setIaAbierta(false)}
+          alGenerar={aplicarGenerada}
+        />
+      )}
     </Hoja>
   );
 }
