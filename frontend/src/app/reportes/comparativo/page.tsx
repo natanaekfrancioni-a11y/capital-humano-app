@@ -1,13 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useId, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { BloqueDatos } from '@/components/reportes/Encabezado';
 import { GraficoComparativo } from '@/components/reportes/GraficoComparativo';
 import { PantallaConsultor } from '@/components/shell/PantallaConsultor';
 import { useSalir } from '@/components/shell/useSalir';
 import { useVolver } from '@/components/shell/Volver';
 import { Boton } from '@/components/ui/Boton';
-import { CampoTexto } from '@/components/ui/Campo';
+import { CampoCombo } from '@/components/ui/Campo';
 import { useAvisos } from '@/components/ui/Dialogo';
 import { Grilla } from '@/components/ui/Grilla';
 import { BarraAcciones, Hoja, Seccion } from '@/components/ui/Hoja';
@@ -25,8 +25,6 @@ const contiene = (valor: string, filtro: string) => !filtro.trim() || valor.toUp
 function ReporteComparativo() {
   const avisos = useAvisos();
   const salir = useSalir();
-  const empresasId = useId();
-  const puestosId = useId();
   const [todos, setTodos] = useState<Puesto[]>([]);
   const [empresa, setEmpresa] = useState('');
   const [nombrePuesto, setNombrePuesto] = useState('');
@@ -42,7 +40,10 @@ function ReporteComparativo() {
   }, [avisos]);
 
   const empresas = useMemo(() => [...new Set(todos.map((p) => p.empresa))].sort(), [todos]);
-  const puestosDeEmpresa = useMemo(() => todos.filter((p) => contiene(p.empresa, empresa)), [todos, empresa]);
+  const nombresPuestos = useMemo(
+    () => [...new Set(todos.filter((p) => contiene(p.empresa, empresa)).map((p) => p.nombre))].sort(),
+    [todos, empresa],
+  );
 
   // Pasos 2 a 4: búsqueda de funciones por nombre y empresa ("contiene").
   function buscar(e: FormEvent) {
@@ -109,26 +110,22 @@ function ReporteComparativo() {
       bajada="Compara lo que exige un puesto en cada competencia con lo que obtuvo un candidato evaluado."
     >
       <form onSubmit={buscar} className="grid items-end gap-4 md:grid-cols-[1fr_1fr_auto]">
-        <CampoTexto etiqueta="Empresa" valor={empresa} alCambiar={setEmpresa} list={empresasId} maxLength={50} ayuda="Elija de la lista o escriba parte del nombre." />
-        <datalist id={empresasId}>
-          {empresas.map((e) => (
-            <option key={e} value={e} />
-          ))}
-        </datalist>
-        <CampoTexto
+        <CampoCombo
+          etiqueta="Empresa"
+          valor={empresa}
+          alCambiar={setEmpresa}
+          opciones={empresas}
+          maxLength={50}
+          ayuda="Elija de la lista o escriba parte del nombre."
+        />
+        <CampoCombo
           etiqueta="Nombre del puesto"
           valor={nombrePuesto}
           alCambiar={setNombrePuesto}
-          list={puestosId}
+          opciones={nombresPuestos}
           maxLength={50}
-          disabled={!empresa.trim()}
-          ayuda={empresa.trim() ? 'Puestos de la empresa elegida.' : 'Primero complete la empresa.'}
+          ayuda={empresa.trim() ? 'La lista muestra los puestos de esa empresa.' : 'Elija de la lista o escriba parte del nombre.'}
         />
-        <datalist id={puestosId}>
-          {puestosDeEmpresa.map((p) => (
-            <option key={p.id} value={p.nombre} />
-          ))}
-        </datalist>
         <Boton type="submit" className="md:mb-[1.6rem]">
           Buscar
         </Boton>
