@@ -135,12 +135,19 @@ function OpcionesRespuesta({ usuario }: { usuario: string }) {
 
 interface Item {
   clave: number;
+  /** Id de la opción existente (solo al modificar, CU030). */
+  id?: number;
   nroOrden: string;
   descripcion: string;
 }
 
 let proximaClave = 1;
-const nuevoItem = (nroOrden: number, descripcion = ''): Item => ({ clave: proximaClave++, nroOrden: String(nroOrden), descripcion });
+const nuevoItem = (nroOrden: number, descripcion = '', id?: number): Item => ({
+  clave: proximaClave++,
+  id,
+  nroOrden: String(nroOrden),
+  descripcion,
+});
 
 /** CU029 - Dar de alta opción de respuesta / CU030 - Modificar opción de respuesta */
 function FormularioOpcion({ opcion, alTerminar }: { opcion: OpcionRespuesta | null; alTerminar: (huboCambios: boolean) => void }) {
@@ -151,7 +158,7 @@ function FormularioOpcion({ opcion, alTerminar }: { opcion: OpcionRespuesta | nu
   const [descripcion, setDescripcion] = useState(opcion?.descripcion ?? '');
   const [items, setItems] = useState<Item[]>(() =>
     opcion
-      ? [...opcion.detalles].sort((a, b) => a.nroOrden - b.nroOrden).map((d) => nuevoItem(d.nroOrden, d.descripcion))
+      ? [...opcion.detalles].sort((a, b) => a.nroOrden - b.nroOrden).map((d) => nuevoItem(d.nroOrden, d.descripcion, d.id))
       : [nuevoItem(1), nuevoItem(2)],
   );
   const [errores, setErrores] = useState<ErroresFormulario | null>(null);
@@ -195,7 +202,7 @@ function FormularioOpcion({ opcion, alTerminar }: { opcion: OpcionRespuesta | nu
     }
     setErrores(null);
     setGuardando(true);
-    const lista = items.map((i) => ({ nroOrden: Number(i.nroOrden), descripcion: i.descripcion.trim() }));
+    const lista = items.map((i) => ({ id: i.id, nroOrden: Number(i.nroOrden), descripcion: i.descripcion.trim() }));
     try {
       if (esAlta) {
         await api.crearOpcionRespuesta({ nombre: nombre.trim(), descripcion: descripcion.trim(), items: lista });
@@ -233,7 +240,7 @@ function FormularioOpcion({ opcion, alTerminar }: { opcion: OpcionRespuesta | nu
       bajada={
         esAlta
           ? 'Los campos con * son obligatorios. El orden de visualización va de 1 en 1.'
-          : 'El nombre, la cantidad de opciones y su orden no se pueden modificar: solo las descripciones.'
+          : 'El nombre y la cantidad de opciones no se pueden modificar. Se pueden cambiar la descripción y el orden de visualización, que va de 1 en 1.'
       }
       ancho="angosto"
     >
@@ -296,7 +303,6 @@ function FormularioOpcion({ opcion, alTerminar }: { opcion: OpcionRespuesta | nu
                           inputMode="numeric"
                           value={item.nroOrden}
                           onChange={(e) => cambiar(item.clave, { nroOrden: e.target.value.replace(/\D/g, '') })}
-                          disabled={!esAlta}
                           aria-label={`Orden de la opción ${idx + 1}`}
                           className="cifras h-9 w-20 rounded-[4px] border border-grafito-claro bg-papel px-2 text-cuerpo disabled:bg-rosa-suave"
                         />

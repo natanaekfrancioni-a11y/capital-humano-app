@@ -211,7 +211,8 @@ public class CatalogoService {
         return opcionRespuestaDao.findByActivaTrueAndNombreContainingIgnoreCaseOrderByNombreAsc(nombre.trim());
     }
 
-    public record ItemOpcionInput(Integer nroOrden, String descripcion) {}
+    /** Ítem de la lista de opciones. En el alta no lleva id; al modificar (CU030) identifica la opción existente. */
+    public record ItemOpcionInput(Long id, Integer nroOrden, String descripcion) {}
 
     @Transactional
     public OpcionRespuesta crearOpcionRespuesta(String nombre, String descripcion, List<ItemOpcionInput> items) {
@@ -254,24 +255,55 @@ public class CatalogoService {
                 .filter(OpcionRespuesta::isActiva)
                 .orElseThrow(() -> new BusinessException("Opción de respuesta no encontrada"));
 
+        // 2.A: datos blanqueados
+        List<String> errores = new ArrayList<>();
         String desc = normUpper(descripcion);
-        if (desc.isEmpty()) {
-            throw new BusinessException("La descripción es obligatoria");
+        if (desc.isEmpty()) errores.add("La descripción es obligatoria");
+        if (items != null && items.stream().anyMatch(it -> normUpper(it.descripcion()).isEmpty())) {
+            errores.add("La descripción de cada opción es obligatoria");
         }
+        if (!errores.isEmpty()) {
+            throw new BusinessException("Datos incompletos para modificar la opción de respuesta", errores);
+        }
+
         if (items != null && !items.isEmpty()) {
-            validarItemsConsecutivosYSinDuplicados(items);
-            Map<Integer, String> porOrden = new HashMap<>();
-            for (ItemOpcionInput it : items) {
-                porOrden.put(it.nroOrden(), normUpper(it.descripcion()));
-            }
+            // Paso 1: se pueden cambiar el orden y la descripción de cada opción, pero no agregar ni quitar opciones.
+            Map<Long, DetalleOpcionRespuesta> actuales = new HashMap<>();
             for (DetalleOpcionRespuesta det : op.getDetalles()) {
-                if (porOrden.containsKey(det.getNroOrden())) {
-                    det.setDescripcion(porOrden.get(det.getNroOrden()));
+                actuales.put(det.getId(), det);
+            }
+            Set<Long> recibidos = new HashSet<>();
+            for (ItemOpcionInput it : items) {
+                if (it.id() != null) recibidos.add(it.id());
+            }
+            if (items.size() != actuales.size() || !recibidos.equals(actuales.keySet())) {
+                throw new BusinessException("No se pueden agregar ni quitar opciones de una opción de respuesta existente");
+            }
+            // 2.B (orden no consecutivo) y 2.C (descripción repetida)
+            validarItemsConsecutivosYSinDuplicados(items);
+
+            boolean hayCambios = items.stream().anyMatch(it -> {
+                DetalleOpcionRespuesta det = actuales.get(it.id());
+                return !det.getNroOrden().equals(it.nroOrden()) || !det.getDescripcion().equals(normUpper(it.descripcion()));
+            });
+            if (hayCambios) {
+                // La base no admite dos opciones con el mismo orden ni con la misma descripción. Para poder
+                // intercambiarlos, primero se pasan todas a valores provisorios y después a los definitivos.
+                int provisorio = 1000;
+                for (DetalleOpcionRespuesta det : op.getDetalles()) {
+                    det.setNroOrden(provisorio++);
+                    det.setDescripcion("~" + det.getId());
+                }
+                opcionRespuestaDao.saveAndFlush(op);
+                for (ItemOpcionInput it : items) {
+                    DetalleOpcionRespuesta det = actuales.get(it.id());
+                    det.setNroOrden(it.nroOrden());
+                    det.setDescripcion(normUpper(it.descripcion()));
                 }
             }
         }
         op.setDescripcion(desc);
-        return opcionRespuestaDao.save(op);
+        return opcionRespuestaDao.saveAndFlush(op);
     }
 
     private void validarItemsConsecutivosYSinDuplicados(List<ItemOpcionInput> items) {
