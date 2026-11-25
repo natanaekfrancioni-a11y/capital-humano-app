@@ -1,289 +1,402 @@
 'use client';
 
-import { useState } from 'react';
-import { Modal } from '@/components/Modal';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Boton } from '@/components/ui/Boton';
+import { useAvisos } from '@/components/ui/Dialogo';
+import { api } from '@/lib/api';
+import { aFecha, estado as textoEstado, fechaHora, reloj } from '@/lib/formato';
+import { cerrarSesion, useSesionCandidato } from '@/lib/sesion';
+import type { Configuracion, Cuestionario, PreguntaCuestionario, SesionCandidato } from '@/lib/tipos';
 
-interface DetalleOpcion {
-  id: number;
-  nroOrden?: number;
-  descripcion: string;
-}
+type Etapa = 'cargando' | 'instrucciones' | 'bloque' | 'completo';
 
-interface PreguntaItem {
-  id: number;
-  nroBloque: number;
-  ordenVisual: number;
-  respondida?: boolean;
-  competencia?: { nombre: string };
-  factor?: { nombre: string };
-  pregunta?: {
-    id: number;
-    nombre: string;
-    enunciado: string;
-    opcionRespuesta?: {
-      nombre: string;
-      detalles?: DetalleOpcion[];
-    };
-  };
-}
-
-interface CuestionarioEstado {
-  id: number;
-  estado: string;
-  bloqueActual: number;
-  puntajeTotal?: number | null;
-  candidato?: { apellido: string; nombre: string };
-  puesto?: { nombre: string; empresa: string };
-  preguntas?: PreguntaItem[];
-}
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
-
+/** CU026 - Completar cuestionario (el candidato entra por el CU001). */
 export default function CuestionarioPage() {
-  const [cuestionarioIdInput, setCuestionarioIdInput] = useState('1');
-  const [cuestionario, setCuestionario] = useState<CuestionarioEstado | null>(null);
-  const [selecciones, setSelecciones] = useState<Record<number, number>>({});
-  const [cargando, setCargando] = useState(false);
-  const [enviando, setEnviando] = useState(false);
-  const [alerta, setAlerta] = useState<{
-    open: boolean;
-    title: string;
-    description: string;
-    variant: 'default' | 'danger' | 'success';
-  }>({ open: false, title: '', description: '', variant: 'default' });
+  const router = useRouter();
+  const sesion = useSesionCandidato();
 
-  async function iniciarCuestionario(e: React.FormEvent) {
-    e.preventDefault();
-    const idNum = Number(cuestionarioIdInput);
-    if (!idNum) return;
+  useEffect(() => {
+    if (sesion === null) router.replace('/');
+  }, [sesion, router]);
 
-    setCargando(true);
-    try {
-      const res = await fetch(`${API_URL}/api/evaluaciones/cuestionarios/${idNum}/iniciar`, {
-        method: 'POST',
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        setAlerta({
-          open: true,
-          title: 'No se pudo iniciar el cuestionario',
-          description: data?.message || `Error (${res.status})`,
-          variant: 'danger',
-        });
-        return;
-      }
-      setCuestionario(data);
-      setSelecciones({});
-    } catch (err) {
-      setAlerta({
-        open: true,
-        title: 'Error de conexión',
-        description: err instanceof Error ? err.message : 'Error al iniciar cuestionario',
-        variant: 'danger',
-      });
-    } finally {
-      setCargando(false);
-    }
-  }
-
-  async function enviarBloqueActual(e: React.FormEvent) {
-    e.preventDefault();
-    if (!cuestionario) return;
-
-    const bloquePreguntas = (cuestionario.preguntas ?? []).filter(
-      (p) => p.nroBloque === cuestionario.bloqueActual
+  if (!sesion) {
+    return (
+      <p className="p-8 text-grafito-claro" role="status">
+        Verificando el acceso…
+      </p>
     );
+  }
+  return <CompletarCuestionario sesion={sesion} />;
+}
 
-    const respuestasPayload = bloquePreguntas.map((pq) => ({
-      preguntaCuestionarioId: pq.id,
-      detalleOpcionRespuestaId: selecciones[pq.id] ?? null,
-    }));
+function CompletarCuestionario({ sesion }: { sesion: SesionCandidato }) {
+  const router = useRouter();
+  const avisos = useAvisos();
+  const [etapa, setEtapa] = useState<Etapa>('cargando');
+  const [config, setConfig] = useState<Configuracion | null>(null);
+  const [cuestionario, setCuestionario] = useState<Cuestionario | null>(null);
+  const [selecciones, setSelecciones] = useState<Record<number, number>>({});
+  const [faltantes, setFaltantes] = useState<number[]>([]);
+  const [enviando, setEnviando] = useState(false);
+  const [ahora, setAhora] = useState(() => Date.now());
+  const tituloRef = useRef<HTMLHeadingElement>(null);
+  const tiempoAgotado = useRef(false);
 
+  const terminar = useCallback(() => {
+    cerrarSesion();
+    router.replace('/');
+  }, [router]);
+
+  const iniciar = useCallback(async () => {
+    try {
+      const q = await api.iniciarCuestionario(sesion.cuestionarioId);
+      setCuestionario(q);
+      setSelecciones({});
+      setFaltantes([]);
+      setEtapa(q.estado === 'COMPLETO' ? 'completo' : 'bloque');
+    } catch (e) {
+      // 1.A / 1.B / accesos superados: el sistema avisa la situación y el CU finaliza.
+      await avisos.error(e, 'No se puede completar el cuestionario');
+      terminar();
+    }
+  }, [sesion.cuestionarioId, avisos, terminar]);
+
+  // Paso 1: instrucciones si el cuestionario está activo; si ya estaba en proceso, se retoma (1.C).
+  useEffect(() => {
+    let vigente = true;
+    api
+      .configuracion()
+      .then((c) => {
+        if (!vigente) return;
+        setConfig(c);
+        if (sesion.estado === 'ACTIVO') setEtapa('instrucciones');
+        else iniciar();
+      })
+      .catch(async (e) => {
+        await avisos.error(e, 'No se han podido recuperar las preguntas. Por favor, reintente en unos minutos.');
+        terminar();
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [sesion.estado, iniciar, avisos, terminar]);
+
+  // Cronómetro: cuenta regresiva desde el inicio del cuestionario.
+  useEffect(() => {
+    if (etapa !== 'bloque') return;
+    const id = window.setInterval(() => setAhora(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [etapa]);
+
+  const fin = useMemo(() => {
+    const inicio = aFecha(cuestionario?.fechaInicio);
+    return inicio && config ? inicio.getTime() + config.tiempoMaxMinutos * 60_000 : null;
+  }, [cuestionario?.fechaInicio, config]);
+  const restante = fin === null ? null : Math.max(0, Math.round((fin - ahora) / 1000));
+
+  useEffect(() => {
+    if (etapa !== 'bloque' || restante !== 0 || tiempoAgotado.current) return;
+    tiempoAgotado.current = true;
+    avisos
+      .abrir({
+        tipo: 'informativa',
+        titulo: 'Tiempo agotado',
+        mensaje: 'El tiempo para completar el cuestionario ha expirado. Las respuestas de los bloques ya enviados quedaron guardadas.',
+      })
+      .then(terminar);
+  }, [etapa, restante, avisos, terminar]);
+
+  const preguntas = useMemo(() => [...(cuestionario?.preguntas ?? [])].sort((a, b) => a.ordenVisual - b.ordenVisual), [cuestionario]);
+  const totalBloques = preguntas.reduce((max, p) => Math.max(max, p.nroBloque), 0);
+  const bloque = cuestionario?.bloqueActual ?? 1;
+  const delBloque = preguntas.filter((p) => p.nroBloque === bloque);
+  const esUltimo = bloque >= totalBloques;
+
+  useEffect(() => {
+    if (etapa === 'bloque' || etapa === 'completo') {
+      window.scrollTo({ top: 0 });
+      tituloRef.current?.focus();
+    }
+  }, [etapa, bloque]);
+
+  // Pasos 5 a 8: se valida el bloque, se guarda y se pasa al siguiente (o se finaliza).
+  async function enviarBloque() {
+    if (!cuestionario) return;
+    const sinResponder = delBloque.filter((p) => selecciones[p.id] === undefined).map((p) => p.id);
+    if (sinResponder.length) {
+      setFaltantes(sinResponder);
+      document.getElementById(`pregunta-${sinResponder[0]}`)?.focus();
+      return;
+    }
+    if (esUltimo) {
+      const ok = await avisos.confirmar(
+        'Finalizar el cuestionario',
+        '¿Está seguro que desea finalizar la evaluación? Una vez enviada no podrá modificar sus respuestas.',
+        { aceptar: 'Finalizar', rechazar: 'Seguir revisando' },
+      );
+      if (!ok) return;
+    }
     setEnviando(true);
     try {
-      const res = await fetch(
-        `${API_URL}/api/evaluaciones/cuestionarios/${cuestionario.id}/bloques/${cuestionario.bloqueActual}/responder`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ respuestas: respuestasPayload }),
-        }
+      const q = await api.responderBloque(
+        cuestionario.id,
+        bloque,
+        delBloque.map((p) => ({ preguntaCuestionarioId: p.id, detalleOpcionRespuestaId: selecciones[p.id] })),
       );
-
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        setAlerta({
-          open: true,
-          title: 'Revisá las respuestas del bloque',
-          description: data?.message || `Error al responder bloque (${res.status})`,
-          variant: 'danger',
-        });
-        return;
-      }
-
-      setCuestionario(data);
-      setSelecciones({});
-      if (data?.estado === 'COMPLETO') {
-        setAlerta({
-          open: true,
-          title: 'Cuestionario completado',
-          description: `Puntaje final obtenido: ${data.puntajeTotal ?? 'calculado'}. Ya figura disponible en el Orden de Méritos.`,
-          variant: 'success',
-        });
-      }
-    } catch (err) {
-      setAlerta({
-        open: true,
-        title: 'Error al enviar bloque',
-        description: err instanceof Error ? err.message : 'Error de red',
-        variant: 'danger',
-      });
+      setCuestionario(q);
+      setFaltantes([]);
+      if (q.estado === 'COMPLETO') setEtapa('completo');
+    } catch (e) {
+      await avisos.error(e, 'No se pudo guardar el bloque');
+      if (e instanceof Error && /tiempo máximo|accesos/.test(e.message)) terminar();
     } finally {
       setEnviando(false);
     }
   }
 
-  const preguntasDelBloque =
-    cuestionario && cuestionario.estado === 'EN_PROCESO'
-      ? (cuestionario.preguntas ?? [])
-          .filter((p) => p.nroBloque === cuestionario.bloqueActual)
-          .sort((a, b) => a.ordenVisual - b.ordenVisual)
-      : [];
+  async function salir() {
+    if (etapa === 'bloque') {
+      const ok = await avisos.confirmar(
+        'Salir del cuestionario',
+        'Las respuestas de los bloques ya enviados quedan guardadas. Puede volver a ingresar con su clave mientras el cuestionario siga vigente; cada ingreso cuenta como un acceso.',
+        { aceptar: 'Salir', rechazar: 'Seguir respondiendo' },
+      );
+      if (!ok) return;
+    }
+    terminar();
+  }
+
+  const respondidasAntes = preguntas.filter((p) => p.nroBloque < bloque).length;
+  const respondidasAhora = respondidasAntes + delBloque.filter((p) => selecciones[p.id] !== undefined).length;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Completar Cuestionario</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Iniciá o sorteá un cuestionario activo por ID y respondé bloque a bloque.
-        </p>
-      </div>
-
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-        <form onSubmit={iniciarCuestionario} className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-700">
-              ID de Cuestionario
-            </label>
-            <input
-              type="number"
-              min="1"
-              value={cuestionarioIdInput}
-              onChange={(e) => setCuestionarioIdInput(e.target.value)}
-              className="w-40 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-mono text-slate-900"
-            />
+    <div className="min-h-dvh">
+      <header className="sticky top-0 z-20 border-b border-linea bg-papel">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-3">
+          <div className="min-w-0">
+            <p className="truncate text-chica font-extrabold text-grafito">
+              <span className="hidden sm:inline">Consultora </span>Capit@l Humano
+            </p>
+            <p className="dato truncate text-chica text-grafito-claro">{sesion.candidatoNombre}</p>
           </div>
-          <button
-            type="submit"
-            disabled={cargando}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-50"
-          >
-            {cargando ? 'Cargando...' : 'Iniciar / Continuar'}
-          </button>
-        </form>
-      </section>
-
-      {cuestionario && (
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                Cuestionario #{cuestionario.id}
-              </span>
-              <h2 className="text-lg font-semibold text-slate-900">
-                {cuestionario.puesto?.nombre ?? 'Evaluación'} —{' '}
-                {cuestionario.candidato
-                  ? `${cuestionario.candidato.apellido}, ${cuestionario.candidato.nombre}`
-                  : ''}
-              </h2>
-            </div>
-            <div className="flex items-center gap-2 text-xs font-semibold">
-              <span className="rounded-full bg-rose-50 border border-rose-200 px-3 py-1 text-slate-800">
-                Estado: {cuestionario.estado}
-              </span>
-              {cuestionario.estado === 'EN_PROCESO' && (
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
-                  Bloque {cuestionario.bloqueActual}
-                </span>
-              )}
-              {cuestionario.puntajeTotal != null && (
-                <span className="rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-emerald-800">
-                  Puntaje: {cuestionario.puntajeTotal}
-                </span>
-              )}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {cuestionario && cuestionario.estado === 'EN_PROCESO' && (
-        <form onSubmit={enviarBloqueActual} className="space-y-4">
-          {preguntasDelBloque.map((pq, idx) => {
-            const detalles = pq.pregunta?.opcionRespuesta?.detalles ?? [];
-            return (
-              <div
-                key={pq.id}
-                className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs space-y-3"
+          <div className="flex items-center gap-3">
+            {etapa === 'bloque' && restante !== null && (
+              <p
+                className={`cifras text-right text-chica ${restante <= 300 ? 'font-extrabold text-error' : 'text-grafito'}`}
+                aria-live={restante <= 300 && restante % 60 === 0 ? 'polite' : 'off'}
               >
-                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                  <span className="font-semibold text-slate-800">Pregunta {idx + 1}</span>
-                  <span>·</span>
-                  <span>{pq.competencia?.nombre ?? 'Competencia'}</span>
-                  <span>·</span>
-                  <span>{pq.factor?.nombre ?? 'Factor'}</span>
-                </div>
-                <p className="text-sm font-medium text-slate-900">
-                  {pq.pregunta?.enunciado ?? pq.pregunta?.nombre}
-                </p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {detalles.map((det) => {
-                    const seleccionada = selecciones[pq.id] === det.id;
-                    return (
-                      <label
-                        key={det.id}
-                        className={`flex cursor-pointer items-center gap-2.5 rounded-lg border px-3.5 py-2.5 text-sm transition ${
-                          seleccionada
-                            ? 'border-slate-900 bg-rose-50/80 font-medium text-slate-900'
-                            : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name={`preg-${pq.id}`}
-                          checked={seleccionada}
-                          onChange={() =>
-                            setSelecciones((prev) => ({ ...prev, [pq.id]: det.id }))
-                          }
-                          className="h-4 w-4 text-slate-900"
-                        />
-                        <span>{det.descripcion}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-
-          <div className="flex justify-end">
+                <span className="block whitespace-nowrap text-grafito-claro">Tiempo restante</span>
+                <span className="text-subtitulo font-extrabold">{reloj(restante)}</span>
+              </p>
+            )}
             <button
-              type="submit"
-              disabled={enviando}
-              className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-50"
+              type="button"
+              onClick={salir}
+              className="h-9 rounded-[4px] border-[1.5px] border-grafito px-3.5 text-chica font-bold text-grafito hover:bg-rosa-suave"
             >
-              {enviando ? 'Guardando bloque...' : 'Guardar y Continuar'}
+              Salir
             </button>
           </div>
-        </form>
-      )}
+        </div>
+      </header>
 
-      <Modal
-        open={alerta.open}
-        title={alerta.title}
-        description={alerta.description}
-        variant={alerta.variant}
-        onClose={() => setAlerta((prev) => ({ ...prev, open: false }))}
-      />
+      <main className="mx-auto max-w-3xl px-4 py-6 sm:py-10">
+        {etapa === 'cargando' && (
+          <p className="text-grafito-claro" role="status">
+            Preparando el cuestionario…
+          </p>
+        )}
+
+        {etapa === 'instrucciones' && config && (
+          <section className="rounded-[6px] border border-linea bg-papel px-5 py-7 sm:px-9">
+            <h1 className="regla-doble pb-3 text-titulo font-extrabold">Cuestionario: instrucciones</h1>
+            <p className="dato mt-6 max-w-[62ch] text-cuerpo leading-relaxed">{config.instrucciones}</p>
+            <ul className="mt-6 divide-y divide-linea border-y border-linea text-cuerpo">
+              <li className="flex justify-between gap-4 py-3">
+                <span className="font-bold">Tiempo para completarlo</span>
+                <span className="cifras">{config.tiempoMaxMinutos} minutos desde que lo comienza</span>
+              </li>
+              <li className="flex justify-between gap-4 py-3">
+                <span className="font-bold">Preguntas por bloque</span>
+                <span className="cifras">{config.preguntasPorBloque}</span>
+              </li>
+              <li className="flex justify-between gap-4 py-3">
+                <span className="font-bold">Ingresos permitidos</span>
+                <span className="cifras">{config.maxAccesos}</span>
+              </li>
+              <li className="flex justify-between gap-4 py-3">
+                <span className="font-bold">Estado del cuestionario</span>
+                <span>{textoEstado(sesion.estado)}</span>
+              </li>
+            </ul>
+            <p className="mt-5 text-chica text-grafito-claro">
+              Cada pregunta tiene una única respuesta. Al pasar al siguiente bloque, las respuestas se guardan y ya no se pueden
+              cambiar. El tiempo empieza a correr al presionar Aceptar.
+            </p>
+            <div className="mt-7 flex flex-wrap justify-between gap-3 border-t border-linea pt-5">
+              <Boton onClick={terminar}>Cancelar</Boton>
+              <Boton
+                variante="principal"
+                onClick={() => {
+                  setEtapa('cargando');
+                  iniciar();
+                }}
+              >
+                Aceptar y comenzar
+              </Boton>
+            </div>
+          </section>
+        )}
+
+        {etapa === 'bloque' && cuestionario && (
+          <section aria-labelledby="titulo-bloque">
+            <div className="mb-6">
+              <h1 id="titulo-bloque" ref={tituloRef} tabIndex={-1} className="text-titulo font-extrabold outline-none">
+                Bloque {bloque} de {totalBloques}
+              </h1>
+              <p className="dato mt-1 text-chica text-grafito-claro">
+                {cuestionario.puesto.nombre} ({cuestionario.puesto.empresa})
+              </p>
+              <Progreso total={totalBloques} actual={bloque} respondidas={respondidasAhora} preguntas={preguntas.length} />
+            </div>
+
+            {faltantes.length > 0 && (
+              <p role="alert" className="mb-5 border-l-4 border-error bg-[#fdf1f0] px-4 py-3 font-bold text-error">
+                Debe seleccionar una opción para continuar. Falta responder{' '}
+                {faltantes.length === 1 ? 'la pregunta' : 'las preguntas'}{' '}
+                {faltantes.map((id) => preguntas.find((p) => p.id === id)?.ordenVisual).join(', ')}.
+              </p>
+            )}
+
+            <ol className="grid gap-5">
+              {delBloque.map((pq) => (
+                <PreguntaBloque
+                  key={pq.id}
+                  pq={pq}
+                  total={preguntas.length}
+                  seleccion={selecciones[pq.id]}
+                  falta={faltantes.includes(pq.id)}
+                  alElegir={(det) => {
+                    setSelecciones((s) => ({ ...s, [pq.id]: det }));
+                    setFaltantes((f) => f.filter((x) => x !== pq.id));
+                  }}
+                />
+              ))}
+            </ol>
+
+            <div className="mt-7 flex justify-end border-t border-linea pt-5">
+              <Boton variante="principal" onClick={enviarBloque} ocupado={enviando} textoOcupado="Guardando respuestas…">
+                {esUltimo ? 'Finalizar' : 'Siguiente'}
+              </Boton>
+            </div>
+          </section>
+        )}
+
+        {etapa === 'completo' && cuestionario && (
+          <section className="rounded-[6px] border border-linea bg-papel px-5 py-8 sm:px-9">
+            <h1 ref={tituloRef} tabIndex={-1} className="regla-doble pb-3 text-titulo font-extrabold outline-none">
+              Cuestionario completado
+            </h1>
+            <p className="mt-6 text-subtitulo">La evaluación ha sido enviada correctamente. ¡Muchas gracias!</p>
+            <dl className="mt-6 grid gap-x-8 gap-y-2 text-cuerpo sm:grid-cols-[auto_1fr]">
+              <dt className="font-bold">Fecha de finalización</dt>
+              <dd className="cifras">{fechaHora(cuestionario.fechaFin)} hs</dd>
+              <dt className="font-bold">Tiempo</dt>
+              <dd className="cifras">{duracion(cuestionario.fechaInicio, cuestionario.fechaFin)}</dd>
+              <dt className="font-bold">Cantidad de preguntas</dt>
+              <dd className="cifras">{preguntas.length}</dd>
+            </dl>
+            <div className="mt-8 flex justify-end border-t border-linea pt-5">
+              <Boton variante="principal" onClick={terminar}>
+                Finalizar
+              </Boton>
+            </div>
+          </section>
+        )}
+      </main>
     </div>
+  );
+}
+
+function duracion(inicio: string | null, fin: string | null): string {
+  const a = aFecha(inicio);
+  const b = aFecha(fin);
+  if (!a || !b) return '-';
+  const minutos = Math.max(1, Math.round((b.getTime() - a.getTime()) / 60_000));
+  return minutos === 1 ? '1 minuto' : `${minutos} minutos`;
+}
+
+/** Avance por bloques: un círculo por bloque, relleno en los ya enviados. */
+function Progreso({ total, actual, respondidas, preguntas }: { total: number; actual: number; respondidas: number; preguntas: number }) {
+  const porcentaje = preguntas ? Math.round((respondidas / preguntas) * 100) : 0;
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div
+        role="progressbar"
+        aria-label="Avance del cuestionario"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={porcentaje}
+        className="flex items-center gap-1.5"
+      >
+        {Array.from({ length: total }, (_, i) => (
+          <span
+            key={i}
+            className={`h-3.5 w-3.5 rounded-full border-2 ${
+              i + 1 < actual ? 'border-grafito bg-grafito' : i + 1 === actual ? 'border-tinta bg-papel' : 'border-linea bg-papel'
+            }`}
+          />
+        ))}
+      </div>
+      <span className="cifras text-chica text-grafito-claro">
+        {respondidas} de {preguntas} preguntas respondidas ({porcentaje}%)
+      </span>
+    </div>
+  );
+}
+
+function PreguntaBloque({
+  pq,
+  total,
+  seleccion,
+  falta,
+  alElegir,
+}: {
+  pq: PreguntaCuestionario;
+  total: number;
+  seleccion: number | undefined;
+  falta: boolean;
+  alElegir: (detalleId: number) => void;
+}) {
+  const opciones = [...pq.pregunta.opcionRespuesta.detalles].sort((a, b) => a.nroOrden - b.nroOrden);
+  return (
+    <li
+      className={`rounded-[6px] border bg-papel px-5 py-5 sm:px-7 ${falta ? 'border-2 border-error' : 'border-linea'}`}
+    >
+      <fieldset>
+        <legend id={`pregunta-${pq.id}`} tabIndex={-1} className="outline-none">
+          <span className="cifras block text-chica font-bold text-tinta">
+            Pregunta {pq.ordenVisual} de {total}
+            {falta && <span className="text-error"> (sin responder)</span>}
+          </span>
+          <span className="dato mt-2 block text-subtitulo font-bold leading-snug text-grafito">{pq.pregunta.enunciado}</span>
+        </legend>
+        <div className="mt-4 divide-y divide-linea border-y border-linea">
+          {opciones.map((o) => (
+            <label key={o.id} className="flex cursor-pointer items-center gap-4 py-3 hover:bg-rosa-suave">
+              <input
+                type="radio"
+                name={`pq-${pq.id}`}
+                className="burbuja burbuja-grande"
+                checked={seleccion === o.id}
+                onChange={() => alElegir(o.id)}
+              />
+              <span className="dato text-cuerpo">{o.descripcion}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+    </li>
   );
 }

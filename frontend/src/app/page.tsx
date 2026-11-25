@@ -1,193 +1,200 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Boton } from '@/components/ui/Boton';
+import { CampoSeleccion, CampoTexto } from '@/components/ui/Campo';
+import { useAvisos } from '@/components/ui/Dialogo';
+import { ApiError, api } from '@/lib/api';
+import { guardarSesionCandidato, guardarSesionConsultor, useSesionCandidato, useSesionConsultor } from '@/lib/sesion';
 
-interface Candidato {
-  id: number;
-  nroCandidato: string;
-  apellido: string;
-  nombre: string;
-  tipoDocumento: string;
-  nroDocumento: string;
-  escolaridad?: string;
-  email?: string;
-}
+type Acceso = 'consultor' | 'candidato';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
+const TIPOS_DOCUMENTO = ['DNI', 'LE', 'LC', 'PP'].map((t) => ({ valor: t, texto: t }));
 
-export default function HomePage() {
-  const [candidatos, setCandidatos] = useState<Candidato[]>([]);
-  const [apellido, setApellido] = useState('');
-  const [nombre, setNombre] = useState('');
-  const [nroCandidato, setNroCandidato] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+/** CU001 - Autenticar usuario */
+export default function IngresoPage() {
+  const router = useRouter();
+  const avisos = useAvisos();
+  const consultor = useSesionConsultor();
+  const candidato = useSesionCandidato();
 
-  async function cargarCandidatos() {
-    setLoading(true);
-    setError(null);
+  const [acceso, setAcceso] = useState<Acceso | null>(null);
+  const [usuario, setUsuario] = useState('');
+  const [contrasena, setContrasena] = useState('');
+  const [tipoDocumento, setTipoDocumento] = useState('DNI');
+  const [nroDocumento, setNroDocumento] = useState('');
+  const [clave, setClave] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const primerCampo = useRef<HTMLInputElement>(null);
+
+  // Si ya hay una sesión abierta, se retoma.
+  useEffect(() => {
+    if (consultor) router.replace('/inicio');
+    else if (candidato) router.replace('/cuestionario');
+  }, [consultor, candidato, router]);
+
+  useEffect(() => {
+    if (acceso) primerCampo.current?.focus();
+  }, [acceso]);
+
+  function blanquear() {
+    setUsuario('');
+    setContrasena('');
+    setNroDocumento('');
+    setClave('');
+  }
+
+  function salir() {
+    blanquear();
+    setTipoDocumento('DNI');
+    setAcceso(null);
+  }
+
+  async function ingresar(e: FormEvent) {
+    e.preventDefault();
+    if (!acceso || enviando) return;
+    setEnviando(true);
     try {
-      const params = new URLSearchParams();
-      if (apellido.trim()) params.set('apellido', apellido.trim());
-      if (nombre.trim()) params.set('nombre', nombre.trim());
-      if (nroCandidato.trim()) params.set('nroCandidato', nroCandidato.trim());
-
-      const qs = params.toString();
-      const url = `${API_URL}/api/evaluaciones/candidatos${qs ? `?${qs}` : ''}`;
-      const res = await fetch(url);
-      if (!res.ok) {
-        throw new Error(`Error HTTP ${res.status}`);
+      if (acceso === 'consultor') {
+        const sesion = await api.ingresarConsultor(usuario, contrasena);
+        guardarSesionConsultor(sesion);
+        router.replace('/inicio');
+      } else {
+        const sesion = await api.ingresarCandidato(tipoDocumento, nroDocumento, clave);
+        guardarSesionCandidato(sesion);
+        router.replace('/cuestionario');
       }
-      const data: Candidato[] = await res.json();
-      setCandidatos(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al cargar candidatos');
+      // 5.A / 3.A.2: se muestra el error, se blanquean los campos y se vuelve a pedir el ingreso.
+      if (err instanceof ApiError && !err.sinConexion) {
+        await avisos.abrir({ tipo: 'error', titulo: 'No se pudo ingresar', mensaje: err.message });
+        blanquear();
+        primerCampo.current?.focus();
+      } else {
+        await avisos.error(err, 'No se pudo ingresar');
+      }
     } finally {
-      setLoading(false);
+      setEnviando(false);
     }
   }
 
-  useEffect(() => {
-    cargarCandidatos();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    cargarCandidatos();
-  }
-
-  function handleLimpiar() {
-    setApellido('');
-    setNombre('');
-    setNroCandidato('');
-    setTimeout(() => cargarCandidatos(), 0);
-  }
+  const completo =
+    acceso === 'consultor'
+      ? usuario.trim() !== '' && contrasena !== ''
+      : acceso === 'candidato' && nroDocumento.trim() !== '' && clave.trim() !== '';
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Candidatos</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Consultá y filtrá los candidatos registrados para procesos de evaluación.
+    <main className="grid min-h-dvh place-items-center px-4 py-10">
+      <div className="grid w-full max-w-[60rem] items-start gap-10 md:grid-cols-[1fr_minmax(0,27rem)] md:gap-16">
+        <div className="md:pt-10">
+          <p className="text-portada font-extrabold tracking-[-0.02em] text-grafito sm:text-[3.25rem] sm:leading-none">
+            Capit@l Humano
+          </p>
+          <p className="mt-4 max-w-[34ch] text-subtitulo text-grafito-claro">
+            Evaluación de perfiles por competencias para la selección de personal TIC.
           </p>
         </div>
-        <Link
-          href="/evaluaciones"
-          className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-xs transition hover:bg-slate-800"
-        >
-          Ir a Evaluar Candidatos
-        </Link>
-      </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-          <input
-            type="text"
-            placeholder="Apellido"
-            value={apellido}
-            onChange={(e) => setApellido(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none"
-          />
-          <input
-            type="text"
-            placeholder="Nombre"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none"
-          />
-          <input
-            type="text"
-            placeholder="Nro Candidato (ej. CAND-001)"
-            value={nroCandidato}
-            onChange={(e) => setNroCandidato(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none"
-          />
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              className="flex-1 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-            >
-              Buscar
-            </button>
-            <button
-              type="button"
-              onClick={handleLimpiar}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
-            >
-              Limpiar
-            </button>
+        <form onSubmit={ingresar} className="rounded-[6px] border border-linea bg-papel px-6 py-7 sm:px-8" noValidate>
+          <h1 className="regla-doble pb-3 text-titulo font-extrabold text-grafito">Ingresar</h1>
+
+          <fieldset className="mt-6">
+            <legend className="text-chica font-bold text-grafito">Tipo de acceso</legend>
+            <div className="mt-2 divide-y divide-linea border-y border-linea">
+              {(
+                [
+                  ['consultor', 'Ingresar como consultor', 'Gestión de puestos, preguntas, evaluaciones y reportes.'],
+                  ['candidato', 'Realizar un cuestionario', 'Con el documento y la clave que le entregó la consultora.'],
+                ] as const
+              ).map(([valor, titulo, detalle]) => (
+                <label key={valor} className="flex cursor-pointer items-start gap-3 py-3.5">
+                  <input
+                    type="radio"
+                    name="acceso"
+                    value={valor}
+                    checked={acceso === valor}
+                    onChange={() => {
+                      blanquear();
+                      setAcceso(valor);
+                    }}
+                    className="burbuja burbuja-grande mt-0.5"
+                  />
+                  <span>
+                    <span className="block font-bold text-grafito">{titulo}</span>
+                    <span className="block text-chica text-grafito-claro">{detalle}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          {acceso === 'consultor' && (
+            <div className="mt-6 grid gap-4">
+              <CampoTexto
+                ref={primerCampo}
+                etiqueta="Usuario"
+                obligatorio
+                valor={usuario}
+                alCambiar={setUsuario}
+                maxLength={15}
+                autoComplete="username"
+              />
+              <CampoTexto
+                etiqueta="Contraseña"
+                obligatorio
+                type="password"
+                valor={contrasena}
+                alCambiar={setContrasena}
+                mayusculas={false}
+                maxLength={20}
+                autoComplete="current-password"
+              />
+            </div>
+          )}
+
+          {acceso === 'candidato' && (
+            <div className="mt-6 grid gap-4 sm:grid-cols-[7rem_1fr]">
+              <CampoSeleccion
+                etiqueta="Tipo"
+                obligatorio
+                valor={tipoDocumento}
+                alCambiar={setTipoDocumento}
+                opciones={TIPOS_DOCUMENTO}
+                textoVacio="Tipo"
+              />
+              <CampoTexto
+                ref={primerCampo}
+                etiqueta="Número de documento"
+                obligatorio
+                inputMode="numeric"
+                valor={nroDocumento}
+                alCambiar={setNroDocumento}
+                maxLength={25}
+              />
+              <CampoTexto
+                className="sm:col-span-2"
+                etiqueta="Clave del cuestionario"
+                obligatorio
+                type="password"
+                valor={clave}
+                alCambiar={setClave}
+                maxLength={8}
+                ayuda="8 letras y números."
+              />
+            </div>
+          )}
+
+          <div className="mt-7 flex flex-wrap justify-between gap-3 border-t border-linea pt-5">
+            <Boton variante="secundario" onClick={salir} disabled={!acceso}>
+              Salir
+            </Boton>
+            <Boton type="submit" variante="principal" disabled={!acceso || !completo} ocupado={enviando} textoOcupado="Verificando…">
+              {acceso === 'candidato' ? 'Ingresar al cuestionario' : 'Ingresar'}
+            </Boton>
           </div>
         </form>
-      </section>
-
-      {loading && (
-        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-xs">
-          Cargando candidatos...
-        </div>
-      )}
-
-      {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          Error al conectar con la API ({API_URL}): {error}
-        </div>
-      )}
-
-      {!loading && !error && (
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
-          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Resultados ({candidatos.length})
-            </span>
-            <span className="text-xs text-slate-400">{API_URL}</span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                <tr>
-                  <th className="px-5 py-3">Nro</th>
-                  <th className="px-5 py-3">Apellido y Nombre</th>
-                  <th className="px-5 py-3">Documento</th>
-                  <th className="px-5 py-3">Escolaridad</th>
-                  <th className="px-5 py-3">Email</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {candidatos.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
-                      No se encontraron candidatos con esos filtros.
-                    </td>
-                  </tr>
-                ) : (
-                  candidatos.map((c) => (
-                    <tr key={c.id} className="transition hover:bg-slate-50/80">
-                      <td className="px-5 py-3.5 font-mono text-xs font-medium text-slate-700">
-                        {c.nroCandidato}
-                      </td>
-                      <td className="px-5 py-3.5 font-medium text-slate-900">
-                        {c.apellido}, {c.nombre}
-                      </td>
-                      <td className="px-5 py-3.5 text-slate-600">
-                        {c.tipoDocumento} {c.nroDocumento}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
-                          {c.escolaridad ?? '-'}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-slate-600">{c.email ?? '-'}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-    </div>
+      </div>
+    </main>
   );
 }

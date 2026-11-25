@@ -1,687 +1,466 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Modal } from '@/components/Modal';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { Ponderaciones, sumaPonderaciones } from '@/components/catalogo/Ponderaciones';
+import { PantallaConsultor } from '@/components/shell/PantallaConsultor';
+import { useSalir } from '@/components/shell/useSalir';
+import { useVolver } from '@/components/shell/Volver';
+import { Boton } from '@/components/ui/Boton';
+import { CampoArea, CampoSeleccion, CampoTexto } from '@/components/ui/Campo';
+import { useAvisos } from '@/components/ui/Dialogo';
+import { Grilla } from '@/components/ui/Grilla';
+import { AvisoErrores, BarraAcciones, Hoja, type ErroresFormulario } from '@/components/ui/Hoja';
+import { ApiError, api } from '@/lib/api';
+import { aNumero, puntaje } from '@/lib/formato';
+import type { Competencia, Factor, OpcionRespuesta, Pregunta } from '@/lib/tipos';
+import { validar } from '@/lib/validacion';
 
-interface Competencia {
-  id: number;
-  nombre: string;
-}
+type Modo = { tipo: 'gestion' } | { tipo: 'alta' } | { tipo: 'modificar'; pregunta: Pregunta };
+type Filtros = { competenciaId: string; factorId: string; nombre: string };
 
-interface Factor {
-  id: number;
-  nombre: string;
-  competencia?: Competencia;
-}
-
-interface OpcionRespuesta {
-  id: number;
-  nombre: string;
-  descripcion?: string;
-}
-
-interface Pregunta {
-  id: number;
-  codigo?: string;
-  nombre: string;
-  enunciado?: string;
-  descripcion?: string;
-  factor?: Factor;
-  opcionRespuesta?: OpcionRespuesta;
-}
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
+const FILTROS_VACIOS: Filtros = { competenciaId: '', factorId: '', nombre: '' };
 
 export default function PreguntasPage() {
-  const [preguntas, setPreguntas] = useState<Pregunta[]>([]);
+  return <PantallaConsultor>{(sesion) => <Preguntas usuario={sesion.username} />}</PantallaConsultor>;
+}
+
+/** CU020 - Gestionar preguntas (invoca CU021, CU022 y CU023). */
+function Preguntas({ usuario }: { usuario: string }) {
+  const avisos = useAvisos();
+  const salir = useSalir();
+  const [modo, setModo] = useState<Modo>({ tipo: 'gestion' });
   const [competencias, setCompetencias] = useState<Competencia[]>([]);
   const [factores, setFactores] = useState<Factor[]>([]);
   const [opciones, setOpciones] = useState<OpcionRespuesta[]>([]);
-
-  const [filtroCompetenciaId, setFiltroCompetenciaId] = useState('');
-  const [filtroFactorId, setFiltroFactorId] = useState('');
-  const [filtroNombre, setFiltroNombre] = useState('');
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Alta / Modificar
-  const [modoFormulario, setModoFormulario] = useState<'none' | 'crear' | 'editar'>('none');
-  const [formCompetenciaId, setFormCompetenciaId] = useState('');
-  const [formFactorId, setFormFactorId] = useState('');
-  const [formCodigo, setFormCodigo] = useState('');
-  const [formNombre, setFormNombre] = useState('');
-  const [formEnunciado, setFormEnunciado] = useState('');
-  const [formDescripcion, setFormDescripcion] = useState('');
-  const [formOpcionId, setFormOpcionId] = useState('');
-  const [guardando, setGuardando] = useState(false);
-
-  // Modales específicos de flujo
-  const [modalBajaOpen, setModalBajaOpen] = useState(false);
-  const [modalCargarOtraOpen, setModalCargarOtraOpen] = useState(false);
-  const [alerta, setAlerta] = useState<{
-    open: boolean;
-    title: string;
-    description: string;
-    variant: 'default' | 'danger' | 'success';
-  }>({ open: false, title: '', description: '', variant: 'default' });
-
-  async function cargarCatalogosYPreguntas() {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (filtroCompetenciaId) params.set('competenciaId', filtroCompetenciaId);
-      if (filtroFactorId) params.set('factorId', filtroFactorId);
-      if (filtroNombre.trim()) params.set('nombre', filtroNombre.trim());
-
-      const [resPreg, resComp, resFact, resOpc] = await Promise.all([
-        fetch(`${API_URL}/api/catalogo/preguntas${params.toString() ? `?${params.toString()}` : ''}`),
-        fetch(`${API_URL}/api/catalogo/competencias`),
-        fetch(`${API_URL}/api/catalogo/factores`),
-        fetch(`${API_URL}/api/catalogo/opciones-respuesta`),
-      ]);
-
-      if (!resPreg.ok) throw new Error(`Error al cargar preguntas (${resPreg.status})`);
-      if (!resComp.ok) throw new Error(`Error al cargar competencias (${resComp.status})`);
-      if (!resFact.ok) throw new Error(`Error al cargar factores (${resFact.status})`);
-      if (!resOpc.ok) throw new Error(`Error al cargar opciones (${resOpc.status})`);
-
-      const [dataPreg, dataComp, dataFact, dataOpc] = await Promise.all([
-        resPreg.json(),
-        resComp.json(),
-        resFact.json(),
-        resOpc.json(),
-      ]);
-
-      setPreguntas(dataPreg);
-      setCompetencias(dataComp);
-      setFactores(dataFact);
-      setOpciones(dataOpc);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al consultar preguntas');
-    } finally {
-      setLoading(false);
-    }
-  }
+  const [filtros, setFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [ultimaBusqueda, setUltimaBusqueda] = useState<Filtros | null>(null);
+  const [resultados, setResultados] = useState<Pregunta[] | null>(null);
+  const [seleccion, setSeleccion] = useState<number | null>(null);
+  const [buscando, setBuscando] = useState(false);
 
   useEffect(() => {
-    cargarCatalogosYPreguntas();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    let vigente = true;
+    Promise.all([api.buscarCompetencias(), api.buscarFactores(), api.buscarOpcionesRespuesta()])
+      .then(([c, f, o]) => {
+        if (!vigente) return;
+        setCompetencias(c);
+        setFactores(f);
+        setOpciones(o);
+      })
+      .catch((e) => avisos.error(e, 'No se pudieron cargar los datos de la pantalla'));
+    return () => {
+      vigente = false;
+    };
+  }, [avisos]);
 
-  const preguntaSeleccionada = preguntas.find((p) => p.id === selectedId) ?? null;
-
-  function abrirNuevaPregunta() {
-    const primeraComp = competencias[0]?.id ? String(competencias[0].id) : '';
-    const primerFactor = factores[0]?.id ? String(factores[0].id) : '';
-    const primeraOpc = opciones[0]?.id ? String(opciones[0].id) : '';
-
-    setFormCompetenciaId(primeraComp);
-    setFormFactorId(primerFactor);
-    setFormCodigo(`PREG-${Date.now().toString().slice(-4)}`);
-    setFormNombre('');
-    setFormEnunciado('');
-    setFormDescripcion('');
-    setFormOpcionId(primeraOpc);
-    setModoFormulario('crear');
-  }
-
-  function abrirModificarPregunta() {
-    if (!preguntaSeleccionada) return;
-    setFormCompetenciaId(
-      preguntaSeleccionada.factor?.competencia?.id
-        ? String(preguntaSeleccionada.factor.competencia.id)
-        : ''
-    );
-    setFormFactorId(preguntaSeleccionada.factor?.id ? String(preguntaSeleccionada.factor.id) : '');
-    setFormCodigo(preguntaSeleccionada.codigo ?? '');
-    setFormNombre(preguntaSeleccionada.nombre ?? '');
-    setFormEnunciado(preguntaSeleccionada.enunciado ?? '');
-    setFormDescripcion(preguntaSeleccionada.descripcion ?? '');
-    setFormOpcionId(
-      preguntaSeleccionada.opcionRespuesta?.id ? String(preguntaSeleccionada.opcionRespuesta.id) : ''
-    );
-    setModoFormulario('editar');
-  }
-
-  function generarConIA() {
-    const factorNombre =
-      factores.find((f) => String(f.id) === formFactorId)?.nombre ?? 'el factor seleccionado';
-    const baseNombre = formNombre.trim() || `Evaluación de ${factorNombre}`;
-    setFormNombre(baseNombre);
-    setFormEnunciado(
-      `¿Cómo aplicás criterios de ${factorNombre.toLowerCase()} para resolver un escenario complejo en equipo?`
-    );
-    if (!formDescripcion.trim()) {
-      setFormDescripcion(`Ítem generado para evaluar ${factorNombre.toLowerCase()}.`);
-    }
-  }
-
-  async function guardarPregunta(e: React.FormEvent) {
-    e.preventDefault();
-
-    const faltantes: string[] = [];
-    if (!formCompetenciaId) faltantes.push('Competencia (*)');
-    if (!formFactorId) faltantes.push('Factor (*)');
-    if (!formNombre.trim()) faltantes.push('Nombre de Pregunta (*)');
-    if (!formEnunciado.trim()) faltantes.push('Pregunta (*)');
-    if (!formOpcionId) faltantes.push('Opción de Respuesta (*)');
-    if (modoFormulario === 'crear' && !formCodigo.trim()) faltantes.push('Código');
-
-    if (faltantes.length > 0) {
-      setAlerta({
-        open: true,
-        title: 'Omisión en Campos',
-        description: `Los siguientes campos son obligatorios: [${faltantes.join(', ')}]. Es necesario completarlos para continuar.`,
-        variant: 'danger',
-      });
-      return;
-    }
-
-    const excedidos: string[] = [];
-    if (formCodigo.trim().length > 30) excedidos.push('Código (máx. 30)');
-    if (formNombre.trim().length > 120) excedidos.push('Nombre de Pregunta (máx. 120)');
-    if (formDescripcion.trim().length > 255) excedidos.push('Descripción (máx. 255)');
-
-    if (excedidos.length > 0) {
-      setAlerta({
-        open: true,
-        title: 'Longitud maxima superada',
-        description: `Se ha superado el límite de caracteres en los siguientes campos: [${excedidos.join(', ')}]. Por favor, acorte el texto para continuar.`,
-        variant: 'danger',
-      });
-      return;
-    }
-
-    setGuardando(true);
-    try {
-      const esEdicion = modoFormulario === 'editar' && preguntaSeleccionada;
-      const url = esEdicion
-        ? `${API_URL}/api/catalogo/preguntas/${preguntaSeleccionada.id}`
-        : `${API_URL}/api/catalogo/preguntas`;
-
-      const body = esEdicion
-        ? {
-            opcionRespuestaId: Number(formOpcionId),
-            nombre: formNombre.trim(),
-            enunciado: formEnunciado.trim(),
-            descripcion: formDescripcion.trim() || null,
-          }
-        : {
-            factorId: Number(formFactorId),
-            opcionRespuestaId: Number(formOpcionId),
-            codigo: formCodigo.trim(),
-            nombre: formNombre.trim(),
-            enunciado: formEnunciado.trim(),
-            descripcion: formDescripcion.trim() || null,
-          };
-
-      const res = await fetch(url, {
-        method: esEdicion ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        const msg =
-          data?.message ||
-          (Array.isArray(data?.errors) ? data.errors.join(' · ') : null) ||
-          `Error al guardar pregunta (${res.status})`;
-        const esDuplicada = String(msg).toLowerCase().includes('ya existe');
-        setAlerta({
-          open: true,
-          title: esDuplicada ? 'Pregunta ya existente' : 'Error de validación',
-          description: esDuplicada
-            ? 'Ya se encuentra registrada una pregunta con el mismo nombre para la combinación de Competencia y Factor seleccionada. Por favor, verifique los datos para evitar duplicados.'
-            : msg,
-          variant: 'danger',
+  const ejecutarBusqueda = useCallback(
+    async (f: Filtros) => {
+      setBuscando(true);
+      try {
+        const r = await api.buscarPreguntas({
+          competenciaId: f.competenciaId ? Number(f.competenciaId) : null,
+          factorId: f.factorId ? Number(f.factorId) : null,
+          nombre: f.nombre,
         });
-        return;
+        setResultados(r);
+        setUltimaBusqueda(f);
+        setSeleccion((actual) => (r.some((p) => p.id === actual) ? actual : null));
+      } catch (e) {
+        await avisos.error(e, 'No se pudo realizar la búsqueda');
+      } finally {
+        setBuscando(false);
       }
+    },
+    [avisos],
+  );
 
-      await cargarCatalogosYPreguntas();
+  function buscar(e: FormEvent) {
+    e.preventDefault();
+    if (!filtros.competenciaId && !filtros.factorId && !filtros.nombre.trim()) {
+      avisos.validacion(
+        'Falta un criterio de búsqueda',
+        'Se debe ingresar al menos un criterio de búsqueda: competencia, factor o nombre de pregunta.',
+      );
+      return;
+    }
+    ejecutarBusqueda(filtros);
+  }
 
-      if (!esEdicion) {
-        setModalCargarOtraOpen(true);
-      } else {
-        setModoFormulario('none');
-        setAlerta({
-          open: true,
-          title: 'Pregunta actualizada',
-          description: `La pregunta "${formNombre.trim()}" se modificó correctamente.`,
-          variant: 'success',
+  async function refrescar() {
+    if (ultimaBusqueda) await ejecutarBusqueda(ultimaBusqueda);
+  }
+
+  const seleccionada = resultados?.find((p) => p.id === seleccion) ?? null;
+
+  // CU023 - Dar de baja una pregunta
+  async function eliminar() {
+    if (!seleccionada) return;
+    const confirmado = await avisos.confirmar(
+      'Baja de pregunta',
+      `Los datos de la pregunta ${seleccionada.nombre} serán eliminados del sistema.`,
+      { aceptar: 'Eliminar', rechazar: 'Cancelar', peligro: true },
+    );
+    if (!confirmado) return;
+    try {
+      await api.bajaPregunta(seleccionada.id, usuario);
+      setSeleccion(null);
+      await avisos.informar('Pregunta eliminada', `Los datos de la pregunta ${seleccionada.nombre} han sido eliminados del sistema.`, {
+        cualquierTecla: true,
+      });
+      await refrescar();
+    } catch (e) {
+      await avisos.error(e, 'No se pudo eliminar la pregunta');
+    }
+  }
+
+  const terminarFormulario = useCallback(
+    (huboCambios: boolean) => {
+      setModo({ tipo: 'gestion' });
+      if (huboCambios && ultimaBusqueda) ejecutarBusqueda(ultimaBusqueda);
+    },
+    [ejecutarBusqueda, ultimaBusqueda],
+  );
+
+  if (modo.tipo !== 'gestion') {
+    return (
+      <FormularioPregunta
+        key={modo.tipo === 'modificar' ? modo.pregunta.id : 'alta'}
+        pregunta={modo.tipo === 'modificar' ? modo.pregunta : null}
+        competencias={competencias}
+        opciones={opciones}
+        alTerminar={terminarFormulario}
+      />
+    );
+  }
+
+  const factoresFiltro = filtros.competenciaId
+    ? factores.filter((f) => f.competencia.id === Number(filtros.competenciaId))
+    : factores;
+
+  return (
+    <Hoja titulo="Preguntas" cu="CU020" bajada="Buscar preguntas para modificarlas o darlas de baja, o crear una nueva.">
+      <form onSubmit={buscar} className="grid items-end gap-4 md:grid-cols-[1fr_1fr_1.2fr_auto]">
+        <CampoSeleccion
+          etiqueta="Competencia"
+          valor={filtros.competenciaId}
+          alCambiar={(v) => setFiltros((f) => ({ ...f, competenciaId: v, factorId: '' }))}
+          opciones={competencias.map((c) => ({ valor: String(c.id), texto: c.nombre }))}
+          textoVacio="Todas"
+        />
+        <CampoSeleccion
+          etiqueta="Factor"
+          valor={filtros.factorId}
+          alCambiar={(v) => setFiltros((f) => ({ ...f, factorId: v }))}
+          opciones={factoresFiltro.map((f) => ({ valor: String(f.id), texto: f.nombre }))}
+          textoVacio="Todos"
+        />
+        <CampoTexto
+          etiqueta="Nombre de pregunta"
+          valor={filtros.nombre}
+          alCambiar={(v) => setFiltros((f) => ({ ...f, nombre: v }))}
+          maxLength={100}
+        />
+        <Boton type="submit" variante="secundario" ocupado={buscando} textoOcupado="Buscando…">
+          Buscar
+        </Boton>
+      </form>
+
+      <div className="mt-7">
+        <Grilla
+          etiqueta="Preguntas encontradas"
+          columnas={[
+            { titulo: 'Competencia', celda: (p: Pregunta) => p.factor.competencia.nombre, dato: true, ancho: '22%' },
+            { titulo: 'Factor', celda: (p: Pregunta) => p.factor.nombre, dato: true, ancho: '22%' },
+            {
+              titulo: 'Pregunta',
+              celda: (p: Pregunta) => (
+                <>
+                  <span className="block font-bold">{p.nombre}</span>
+                  <span className="mt-0.5 line-clamp-2 block text-grafito-claro">{p.enunciado}</span>
+                </>
+              ),
+              dato: true,
+            },
+          ]}
+          filas={resultados ?? []}
+          clave={(p) => p.id}
+          seleccion={{
+            modo: 'unica',
+            nombre: 'pregunta',
+            seleccionadas: seleccion === null ? [] : [seleccion],
+            alCambiar: (ids) => setSeleccion(Number(ids[0])),
+            etiquetaFila: (p) => `Seleccionar la pregunta ${p.nombre}`,
+          }}
+          vacio={
+            resultados === null
+              ? 'Cargue al menos un criterio y presione Buscar.'
+              : 'No hay preguntas que coincidan con la búsqueda.'
+          }
+          pie={resultados && resultados.length > 0 ? `${resultados.length} preguntas encontradas.` : undefined}
+        />
+      </div>
+
+      <BarraAcciones
+        izquierda={
+          <Boton variante="secundario" onClick={salir}>
+            Salir
+          </Boton>
+        }
+        derecha={
+          <>
+            <Boton
+              variante="secundario"
+              disabled={!seleccionada}
+              onClick={() => seleccionada && setModo({ tipo: 'modificar', pregunta: seleccionada })}
+            >
+              Modificar
+            </Boton>
+            <Boton variante="secundario" disabled={!seleccionada} onClick={eliminar}>
+              Eliminar
+            </Boton>
+            <Boton variante="principal" onClick={() => setModo({ tipo: 'alta' })}>
+              Nuevo
+            </Boton>
+          </>
+        }
+      />
+    </Hoja>
+  );
+}
+
+interface FormularioProps {
+  pregunta: Pregunta | null;
+  competencias: Competencia[];
+  opciones: OpcionRespuesta[];
+  alTerminar: (huboCambios: boolean) => void;
+}
+
+/** CU021 - Dar de alta pregunta / CU022 - Modificar pregunta */
+function FormularioPregunta({ pregunta, competencias, opciones, alTerminar }: FormularioProps) {
+  const avisos = useAvisos();
+  const esAlta = pregunta === null;
+  const avisoRef = useRef<HTMLDivElement>(null);
+
+  const [competenciaId, setCompetenciaId] = useState(pregunta ? String(pregunta.factor.competencia.id) : '');
+  const [factores, setFactores] = useState<Factor[]>(pregunta ? [pregunta.factor] : []);
+  const [factorId, setFactorId] = useState(pregunta ? String(pregunta.factor.id) : '');
+  const [nombre, setNombre] = useState(pregunta?.nombre ?? '');
+  const [enunciado, setEnunciado] = useState(pregunta?.enunciado ?? '');
+  const [descripcion, setDescripcion] = useState(pregunta?.descripcion ?? '');
+  const [opcionId, setOpcionId] = useState(pregunta ? String(pregunta.opcionRespuesta.id) : '');
+  const [ponderaciones, setPonderaciones] = useState<Record<number, string>>(() =>
+    pregunta
+      ? Object.fromEntries(
+          Object.entries(pregunta.ponderacionesPorDetalle).map(([id, v]) => [Number(id), String(v).replace('.', ',')]),
+        )
+      : {},
+  );
+  const [errores, setErrores] = useState<ErroresFormulario | null>(null);
+  const [porCampo, setPorCampo] = useState<Record<string, string>>({});
+  const [guardando, setGuardando] = useState(false);
+
+  useVolver(useCallback(() => alTerminar(false), [alTerminar]));
+
+  // Al seleccionar una competencia se cargan sus factores (CU021, observaciones).
+  useEffect(() => {
+    if (!esAlta || !competenciaId) return;
+    let vigente = true;
+    api
+      .buscarFactores(Number(competenciaId))
+      .then((f) => vigente && setFactores([...f].sort((a, b) => a.nroOrden - b.nroOrden)))
+      .catch((e) => avisos.error(e, 'No se pudieron cargar los factores'));
+    return () => {
+      vigente = false;
+    };
+  }, [competenciaId, esAlta, avisos]);
+
+  useEffect(() => {
+    if (errores) avisoRef.current?.focus();
+  }, [errores]);
+
+  const opcion = opciones.find((o) => o.id === Number(opcionId)) ?? (pregunta && pregunta.opcionRespuesta.id === Number(opcionId) ? pregunta.opcionRespuesta : undefined);
+
+  function limpiar() {
+    setCompetenciaId('');
+    setFactores([]);
+    setFactorId('');
+    setNombre('');
+    setEnunciado('');
+    setDescripcion('');
+    setOpcionId('');
+    setPonderaciones({});
+    setErrores(null);
+    setPorCampo({});
+  }
+
+  function validarPonderaciones(): string | null {
+    if (!opcion) return null;
+    const valores = opcion.detalles.map((d) => ponderaciones[d.id] ?? '');
+    if (valores.some((v) => v.trim() === '')) return 'Falta cargar la ponderación de alguna opción de respuesta.';
+    if (valores.some((v) => Number.isNaN(aNumero(v)) || aNumero(v) < 0)) return 'Las ponderaciones deben ser 0 o valores positivos.';
+    const suma = sumaPonderaciones(ponderaciones);
+    if (Math.abs(suma - 10) > 0.005) return `Las ponderaciones de las opciones deben sumar 10 puntos (suman ${puntaje(suma)}).`;
+    return null;
+  }
+
+  async function aceptar(e: FormEvent) {
+    e.preventDefault();
+    const r = validar([
+      { campo: 'Competencia', valor: competenciaId, obligatorio: true },
+      { campo: 'Factor', valor: factorId, obligatorio: true },
+      { campo: 'Nombre de pregunta', valor: nombre, obligatorio: true, maximo: 100 },
+      { campo: 'Pregunta', valor: enunciado, obligatorio: true, maximo: 500 },
+      { campo: 'Descripción', valor: descripcion, maximo: 255 },
+      { campo: 'Opción de respuesta', valor: opcionId, obligatorio: true },
+    ]);
+    const errorPonderacion = validarPonderaciones();
+    const mensajes = errorPonderacion ? [...r.mensajes, errorPonderacion] : r.mensajes;
+    if (mensajes.length) {
+      setPorCampo(r.porCampo);
+      setErrores({ titulo: 'No se puede guardar la pregunta', items: mensajes });
+      return;
+    }
+
+    setErrores(null);
+    setPorCampo({});
+    setGuardando(true);
+    const datos = {
+      opcionRespuestaId: Number(opcionId),
+      nombre: nombre.trim(),
+      enunciado: enunciado.trim(),
+      descripcion: descripcion.trim() || null,
+      ponderaciones: Object.fromEntries((opcion?.detalles ?? []).map((d) => [d.id, aNumero(ponderaciones[d.id] ?? '0')])),
+    };
+    try {
+      if (esAlta) {
+        await api.crearPregunta({ factorId: Number(factorId), ...datos });
+        const otra = await avisos.abrir({
+          tipo: 'informativa',
+          titulo: 'Pregunta guardada',
+          mensaje: `La pregunta ${datos.nombre} se ha creado correctamente. ¿Desea cargar otra?`,
+          aceptar: 'Sí',
+          rechazar: 'No',
         });
+        if (otra) limpiar();
+        else alTerminar(true);
+      } else {
+        await api.modificarPregunta(pregunta.id, datos);
+        await avisos.informar('Pregunta modificada', 'La operación ha culminado con éxito.');
+        alTerminar(true);
       }
     } catch (err) {
-      setAlerta({
-        open: true,
-        title: 'Error de conexión',
-        description: err instanceof Error ? err.message : 'Error al comunicarse con la API',
-        variant: 'danger',
-      });
+      if (err instanceof ApiError && !err.sinConexion) {
+        setErrores({ titulo: err.message, items: err.detalles });
+      } else {
+        await avisos.error(err, 'No se pudo guardar la pregunta');
+      }
     } finally {
       setGuardando(false);
     }
   }
 
-  async function confirmarBajaPregunta() {
-    if (!preguntaSeleccionada) return;
-    const nombreEliminado = preguntaSeleccionada.nombre;
-    setModalBajaOpen(false);
-
-    try {
-      const res = await fetch(`${API_URL}/api/catalogo/preguntas/${preguntaSeleccionada.id}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.message || `Error al eliminar pregunta (${res.status})`);
-      }
-
-      setSelectedId(null);
-      await cargarCatalogosYPreguntas();
-      setAlerta({
-        open: true,
-        title: 'SE HA ELIMINADO CORRECTAMENTE',
-        description: `Los datos de la pregunta "${nombreEliminado}" han sido eliminados del sistema.`,
-        variant: 'success',
-      });
-    } catch (err) {
-      setAlerta({
-        open: true,
-        title: 'No se pudo eliminar',
-        description: err instanceof Error ? err.message : 'Error inesperado',
-        variant: 'danger',
-      });
-    }
-  }
-
-  const factoresFiltrados = filtroCompetenciaId
-    ? factores.filter((f) => String(f.competencia?.id) === filtroCompetenciaId)
-    : factores;
-
-  const factoresFormFiltrados = formCompetenciaId
-    ? factores.filter((f) => String(f.competencia?.id) === formCompetenciaId)
-    : factores;
-
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Preguntas</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Gestioná el banco de preguntas por competencia, factor y opción de respuesta.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={abrirNuevaPregunta}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-xs transition hover:bg-slate-800"
-          >
-            Nuevo
-          </button>
-          <button
-            type="button"
-            disabled={!preguntaSeleccionada}
-            onClick={abrirModificarPregunta}
-            className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            Modificar
-          </button>
-          <button
-            type="button"
-            disabled={!preguntaSeleccionada}
-            onClick={() => setModalBajaOpen(true)}
-            className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            Eliminar
-          </button>
-        </div>
-      </div>
+    <Hoja
+      titulo={esAlta ? 'Alta de pregunta' : 'Modificar pregunta'}
+      cu={esAlta ? 'CU021' : 'CU022'}
+      bajada={esAlta ? 'Los campos con * son obligatorios.' : `Código ${pregunta.codigo}. La competencia y el factor no se pueden cambiar.`}
+    >
+      <form onSubmit={aceptar} noValidate>
+        <AvisoErrores titulo={errores?.titulo ?? null} items={errores?.items} refAviso={avisoRef} />
 
-      {modoFormulario !== 'none' && (
-        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-xs">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-lg font-semibold text-slate-900">
-              {modoFormulario === 'crear' ? 'Alta de Preguntas' : 'Modificar Pregunta'}
-            </h2>
-            <button
-              type="button"
-              onClick={generarConIA}
-              className="rounded-lg border border-slate-300 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-rose-100"
-            >
-              Generar con IA
-            </button>
-          </div>
-
-          <form onSubmit={guardarPregunta} className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">
-                  Competencia (*)
-                </label>
-                <select
-                  value={formCompetenciaId}
-                  disabled={modoFormulario === 'editar'}
-                  onChange={(e) => {
-                    const compId = e.target.value;
-                    setFormCompetenciaId(compId);
-                    const primerFact = factores.find((f) => String(f.competencia?.id) === compId);
-                    setFormFactorId(primerFact ? String(primerFact.id) : '');
-                  }}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 disabled:bg-slate-100"
-                >
-                  <option value="">Seleccionar competencia</option>
-                  {competencias.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">
-                  Factor (*)
-                </label>
-                <select
-                  value={formFactorId}
-                  disabled={modoFormulario === 'editar'}
-                  onChange={(e) => setFormFactorId(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 disabled:bg-slate-100"
-                >
-                  <option value="">Seleccionar factor</option>
-                  {factoresFormFiltrados.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">
-                  Nombre de Pregunta (*)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Nombre de Pregunta (*)"
-                  value={formNombre}
-                  onChange={(e) => setFormNombre(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">
-                  Pregunta (*)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enunciado de la pregunta (*)"
-                  value={formEnunciado}
-                  onChange={(e) => setFormEnunciado(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">
-                  Descripción
-                </label>
-                <input
-                  type="text"
-                  placeholder="Descripción opcional"
-                  value={formDescripcion}
-                  onChange={(e) => setFormDescripcion(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">
-                  Opción de Respuesta (*)
-                </label>
-                <select
-                  value={formOpcionId}
-                  onChange={(e) => setFormOpcionId(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                >
-                  <option value="">Seleccionar opción</option>
-                  {opciones.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {modoFormulario === 'crear' && (
-              <div className="max-w-xs">
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Código</label>
-                <input
-                  type="text"
-                  value={formCodigo}
-                  onChange={(e) => setFormCodigo(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono text-slate-900"
-                />
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setModoFormulario('none')}
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={guardando}
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-              >
-                {guardando ? 'Guardando...' : 'Aceptar'}
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
-
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            cargarCatalogosYPreguntas();
-          }}
-          className="grid grid-cols-1 gap-3 sm:grid-cols-4"
-        >
-          <select
-            value={filtroCompetenciaId}
-            onChange={(e) => {
-              setFiltroCompetenciaId(e.target.value);
-              setFiltroFactorId('');
+        <div className="grid gap-5 md:grid-cols-2">
+          <CampoSeleccion
+            etiqueta="Competencia"
+            obligatorio
+            valor={competenciaId}
+            alCambiar={(v) => {
+              setCompetenciaId(v);
+              setFactorId('');
+              if (!v) setFactores([]);
             }}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-          >
-            <option value="">Competencia</option>
-            {competencias.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nombre}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={filtroFactorId}
-            onChange={(e) => setFiltroFactorId(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-          >
-            <option value="">Factor</option>
-            {factoresFiltrados.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.nombre}
-              </option>
-            ))}
-          </select>
-
-          <input
-            type="text"
-            placeholder="Nombre de Pregunta"
-            value={filtroNombre}
-            onChange={(e) => setFiltroNombre(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+            opciones={competencias.map((c) => ({ valor: String(c.id), texto: c.nombre }))}
+            error={porCampo['Competencia']}
+            disabled={!esAlta}
           />
-
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              className="flex-1 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-            >
-              Buscar
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setFiltroCompetenciaId('');
-                setFiltroFactorId('');
-                setFiltroNombre('');
-                setTimeout(() => cargarCatalogosYPreguntas(), 0);
-              }}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
-            >
-              Limpiar
-            </button>
-          </div>
-        </form>
-      </section>
-
-      {loading && (
-        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-xs">
-          Cargando preguntas...
+          <CampoSeleccion
+            etiqueta="Factor"
+            obligatorio
+            valor={factorId}
+            alCambiar={setFactorId}
+            opciones={factores.map((f) => ({ valor: String(f.id), texto: f.nombre }))}
+            textoVacio={competenciaId ? 'Seleccionar…' : 'Primero elija la competencia'}
+            error={porCampo['Factor']}
+            disabled={!esAlta || !competenciaId}
+          />
+          <CampoTexto
+            className="md:col-span-2"
+            etiqueta="Nombre de pregunta"
+            obligatorio
+            valor={nombre}
+            alCambiar={setNombre}
+            maximo={100}
+            error={porCampo['Nombre de pregunta']}
+          />
+          <CampoArea
+            className="md:col-span-2"
+            etiqueta="Pregunta"
+            obligatorio
+            valor={enunciado}
+            alCambiar={setEnunciado}
+            maximo={500}
+            rows={3}
+            error={porCampo['Pregunta']}
+          />
+          <CampoArea
+            className="md:col-span-2"
+            etiqueta="Descripción"
+            valor={descripcion}
+            alCambiar={setDescripcion}
+            maximo={255}
+            rows={2}
+            ayuda="Opcional."
+            error={porCampo['Descripción']}
+          />
+          <CampoSeleccion
+            etiqueta="Opción de respuesta"
+            obligatorio
+            valor={opcionId}
+            alCambiar={(v) => {
+              setOpcionId(v);
+              setPonderaciones({});
+            }}
+            opciones={opciones.map((o) => ({ valor: String(o.id), texto: o.nombre }))}
+            error={porCampo['Opción de respuesta']}
+            ayuda={opcion?.descripcion}
+          />
         </div>
-      )}
 
-      {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {!loading && !error && (
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
-          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Banco de Preguntas ({preguntas.length})
-            </span>
-            {preguntaSeleccionada && (
-              <span className="text-xs font-medium text-slate-700">
-                Seleccionada: {preguntaSeleccionada.nombre}
-              </span>
-            )}
+        {opcion && (
+          <div className="mt-6">
+            <Ponderaciones detalles={opcion.detalles} valores={ponderaciones} alCambiar={setPonderaciones} />
           </div>
+        )}
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                <tr>
-                  <th className="px-4 py-3 w-12">Sel.</th>
-                  <th className="px-5 py-3">Competencia</th>
-                  <th className="px-5 py-3">Factor</th>
-                  <th className="px-5 py-3">Pregunta</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {preguntas.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-5 py-8 text-center text-slate-500">
-                      No hay preguntas para los filtros actuales.
-                    </td>
-                  </tr>
-                ) : (
-                  preguntas.map((preg) => {
-                    const checked = selectedId === preg.id;
-                    return (
-                      <tr
-                        key={preg.id}
-                        onClick={() => setSelectedId(checked ? null : preg.id)}
-                        className={`cursor-pointer transition ${
-                          checked ? 'bg-rose-50/80' : 'hover:bg-slate-50/80'
-                        }`}
-                      >
-                        <td className="px-4 py-3.5">
-                          <input
-                            type="radio"
-                            name="preguntaSeleccionada"
-                            checked={checked}
-                            onChange={() => setSelectedId(checked ? null : preg.id)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="h-4 w-4 border-slate-300 text-slate-900"
-                          />
-                        </td>
-                        <td className="px-5 py-3.5 text-slate-700">
-                          {preg.factor?.competencia?.nombre ?? '-'}
-                        </td>
-                        <td className="px-5 py-3.5 text-slate-700">
-                          {preg.factor?.nombre ?? '-'}
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <div className="font-medium text-slate-900">{preg.nombre}</div>
-                          {preg.enunciado && (
-                            <div className="text-xs text-slate-500">{preg.enunciado}</div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      <Modal
-        open={modalBajaOpen}
-        title="BAJA DE PREGUNTA"
-        description={`Los datos de la pregunta "${preguntaSeleccionada?.nombre ?? ''}" serán eliminados del sistema. ¿Desea continuar?`}
-        variant="danger"
-        confirmLabel="Sí"
-        cancelLabel="No"
-        onClose={() => setModalBajaOpen(false)}
-        onConfirm={confirmarBajaPregunta}
-      />
-
-      <Modal
-        open={modalCargarOtraOpen}
-        title="Pregunta Guardada"
-        description={`La Pregunta "${formNombre.trim()}" se ha creado correctamente. ¿Desea cargar otra?`}
-        variant="success"
-        confirmLabel="Sí"
-        cancelLabel="No"
-        onClose={() => {
-          setModalCargarOtraOpen(false);
-          setModoFormulario('none');
-        }}
-        onConfirm={() => {
-          setModalCargarOtraOpen(false);
-          abrirNuevaPregunta();
-        }}
-      />
-
-      <Modal
-        open={alerta.open}
-        title={alerta.title}
-        description={alerta.description}
-        variant={alerta.variant}
-        onClose={() => setAlerta((prev) => ({ ...prev, open: false }))}
-      />
-    </div>
+        <BarraAcciones
+          izquierda={
+            <>
+              {esAlta && (
+                <Boton variante="secundario" disabled title="Generar con IA (CU033) todavía no está disponible">
+                  Generar con IA
+                </Boton>
+              )}
+              <Boton variante="secundario" onClick={() => alTerminar(false)}>
+                Cancelar
+              </Boton>
+            </>
+          }
+          derecha={
+            <Boton type="submit" variante="principal" ocupado={guardando} textoOcupado="Guardando…">
+              Aceptar
+            </Boton>
+          }
+        />
+      </form>
+    </Hoja>
   );
 }

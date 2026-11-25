@@ -1,32 +1,32 @@
-import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import type { Metadata, Viewport } from 'next';
+import type { ReactNode } from 'react';
+import localFont from 'next/font/local';
 import './globals.css';
-import { AppShell } from '@/components/AppShell';
+import { DialogoProvider } from '@/components/ui/Dialogo';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
+// Atkinson Hyperlegible Next (SIL OFL 1.1): diseñada para leerse fácil, también contra reloj.
+const atkinson = localFont({
+  src: '../fonts/atkinson-hyperlegible-next-latin-wght-normal.woff2',
+  weight: '200 800',
+  style: 'normal',
+  display: 'swap',
+  variable: '--font-atkinson',
 });
 
 export const metadata: Metadata = {
-  title: 'Capital Humano — Sistema de Evaluaciones',
-  description: 'Gestión de puestos, preguntas, evaluaciones y reportes de mérito',
+  title: 'Capit@l Humano — Evaluación de perfiles',
+  description: 'Gestión de evaluaciones de perfiles por competencias',
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export const viewport: Viewport = {
+  themeColor: '#f6edef',
+};
+
+export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="es">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <AppShell>{children}</AppShell>
+    <html lang="es" className={atkinson.variable}>
+      <body className="min-h-dvh antialiased">
+        <DialogoProvider>{children}</DialogoProvider>
       </body>
     </html>
   );

@@ -1,196 +1,269 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Modal } from '@/components/Modal';
-
-interface Puesto {
-  id: number;
-  codigo: string;
-  nombre: string;
-  empresa: string;
-}
-
-interface FilaMerito {
-  cuestionarioId: number;
-  apellido: string;
-  nombre: string;
-  nroDocumento?: string;
-  estado: string;
-  puntajeObtenido?: number | null;
-}
-
-interface ReporteMerito {
-  puestoCodigo: string;
-  puestoNombre: string;
-  empresa: string;
-  ordenMerito: FilaMerito[];
-  noAlcanzanMinimo: FilaMerito[];
-}
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
+import { useCallback, useEffect, useId, useMemo, useState, type FormEvent } from 'react';
+import { BloqueDatos } from '@/components/reportes/Encabezado';
+import { GraficoComparativo } from '@/components/reportes/GraficoComparativo';
+import { PantallaConsultor } from '@/components/shell/PantallaConsultor';
+import { useSalir } from '@/components/shell/useSalir';
+import { useVolver } from '@/components/shell/Volver';
+import { Boton } from '@/components/ui/Boton';
+import { CampoTexto } from '@/components/ui/Campo';
+import { useAvisos } from '@/components/ui/Dialogo';
+import { Grilla } from '@/components/ui/Grilla';
+import { BarraAcciones, Hoja, Seccion } from '@/components/ui/Hoja';
+import { ApiError, api } from '@/lib/api';
+import { diferencia, fecha, puntaje } from '@/lib/formato';
+import type { CandidatoEvaluado, ItemComparativo, Puesto, ReporteComparativo as Reporte } from '@/lib/tipos';
 
 export default function ReporteComparativoPage() {
-  const [puestos, setPuestos] = useState<Puesto[]>([]);
-  const [puestoId, setPuestoId] = useState('');
-  const [reporte, setReporte] = useState<ReporteMerito | null>(null);
-  const [cargando, setCargando] = useState(false);
-  const [alerta, setAlerta] = useState<{
-    open: boolean;
-    title: string;
-    description: string;
-    variant: 'default' | 'danger' | 'success';
-  }>({ open: false, title: '', description: '', variant: 'default' });
+  return <PantallaConsultor>{() => <ReporteComparativo />}</PantallaConsultor>;
+}
+
+const contiene = (valor: string, filtro: string) => !filtro.trim() || valor.toUpperCase().includes(filtro.trim().toUpperCase());
+
+/** CU027 - Emitir reporte comparativo */
+function ReporteComparativo() {
+  const avisos = useAvisos();
+  const salir = useSalir();
+  const empresasId = useId();
+  const puestosId = useId();
+  const [todos, setTodos] = useState<Puesto[]>([]);
+  const [empresa, setEmpresa] = useState('');
+  const [nombrePuesto, setNombrePuesto] = useState('');
+  const [funciones, setFunciones] = useState<Puesto[] | null>(null);
+  const [puestoId, setPuestoId] = useState<number | null>(null);
+  const [candidatos, setCandidatos] = useState<CandidatoEvaluado[] | null>(null);
+  const [cuestionarioId, setCuestionarioId] = useState<number | null>(null);
+  const [reporte, setReporte] = useState<Reporte | null>(null);
+  const [comparando, setComparando] = useState(false);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/catalogo/puestos`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data: Puesto[]) => {
-        setPuestos(data);
-        if (data[0]?.id) {
-          setPuestoId(String(data[0].id));
-        }
-      })
-      .catch(() => {});
-  }, []);
+    api.buscarPuestos().then(setTodos).catch((e) => avisos.error(e, 'No se pudieron cargar los puestos'));
+  }, [avisos]);
 
-  async function cargarComparativo(e: React.FormEvent) {
+  const empresas = useMemo(() => [...new Set(todos.map((p) => p.empresa))].sort(), [todos]);
+  const puestosDeEmpresa = useMemo(() => todos.filter((p) => contiene(p.empresa, empresa)), [todos, empresa]);
+
+  // Pasos 2 a 4: búsqueda de funciones por nombre y empresa ("contiene").
+  function buscar(e: FormEvent) {
     e.preventDefault();
-    if (!puestoId) return;
-    setCargando(true);
+    const r = todos.filter((p) => contiene(p.empresa, empresa) && contiene(p.nombre, nombrePuesto));
+    setFunciones(r);
+    setPuestoId(null);
+    setCandidatos(null);
+    setCuestionarioId(null);
+  }
+
+  // Paso 5: candidatos evaluados (cuestionario completo) en la función seleccionada.
+  async function elegirFuncion(id: number) {
+    setPuestoId(id);
+    setCandidatos(null);
+    setCuestionarioId(null);
     try {
-      const res = await fetch(`${API_URL}/api/evaluaciones/orden-merito?puestoId=${puestoId}`);
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        setReporte(null);
-        setAlerta({
-          open: true,
-          title: 'Sin datos para comparar',
-          description: data?.message || data?.error || data?.detail || `Error (${res.status})`,
-          variant: 'danger',
-        });
-        return;
-      }
-      setReporte(data);
+      setCandidatos(await api.candidatosEvaluados(id));
     } catch (err) {
-      setAlerta({
-        open: true,
-        title: 'Error de conexión',
-        description: err instanceof Error ? err.message : 'Error al consultar el reporte',
-        variant: 'danger',
-      });
-    } finally {
-      setCargando(false);
+      setCandidatos([]);
+      if (err instanceof ApiError && !err.sinConexion) await avisos.informar('Sin candidatos evaluados', err.message);
+      else await avisos.error(err, 'No se pudieron obtener los candidatos evaluados');
     }
   }
 
-  const todosEvaluados: FilaMerito[] = reporte
-    ? [...(reporte.ordenMerito ?? []), ...(reporte.noAlcanzanMinimo ?? [])]
-    : [];
+  // Paso 6 / 6.A
+  async function comparar() {
+    if (cuestionarioId === null) {
+      await avisos.validacion('Selección obligatoria', 'Debe seleccionar un candidato de la lista para generar el reporte comparativo.');
+      return;
+    }
+    setComparando(true);
+    try {
+      setReporte(await api.reporteComparativo(cuestionarioId));
+    } catch (err) {
+      await avisos.error(err, 'No se pudo generar el reporte comparativo');
+    } finally {
+      setComparando(false);
+    }
+  }
+
+  // 6.B
+  async function cancelar() {
+    if (puestoId !== null || cuestionarioId !== null) {
+      const ok = await avisos.confirmar('Confirmación de salida', '¿Está seguro que desea cancelar la operación? Se perderá la selección actual.', {
+        aceptar: 'Sí, salir',
+        rechazar: 'No',
+      });
+      if (!ok) return;
+    }
+    salir();
+  }
+
+  const volverAlListado = useCallback(() => setReporte(null), []);
+
+  if (reporte) {
+    return <HojaReporte reporte={reporte} alVolver={volverAlListado} />;
+  }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Reporte Comparativo</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Compará los puntajes y el cumplimiento de mínimos de los candidatos evaluados para un puesto.
-        </p>
+    <Hoja
+      titulo="Reporte comparativo"
+      cu="CU027"
+      bajada="Compara lo que exige un puesto en cada competencia con lo que obtuvo un candidato evaluado."
+    >
+      <form onSubmit={buscar} className="grid items-end gap-4 md:grid-cols-[1fr_1fr_auto]">
+        <CampoTexto etiqueta="Empresa" valor={empresa} alCambiar={setEmpresa} list={empresasId} maxLength={50} ayuda="Elija de la lista o escriba parte del nombre." />
+        <datalist id={empresasId}>
+          {empresas.map((e) => (
+            <option key={e} value={e} />
+          ))}
+        </datalist>
+        <CampoTexto
+          etiqueta="Nombre del puesto"
+          valor={nombrePuesto}
+          alCambiar={setNombrePuesto}
+          list={puestosId}
+          maxLength={50}
+          disabled={!empresa.trim()}
+          ayuda={empresa.trim() ? 'Puestos de la empresa elegida.' : 'Primero complete la empresa.'}
+        />
+        <datalist id={puestosId}>
+          {puestosDeEmpresa.map((p) => (
+            <option key={p.id} value={p.nombre} />
+          ))}
+        </datalist>
+        <Boton type="submit" className="md:mb-[1.6rem]">
+          Buscar
+        </Boton>
+      </form>
+
+      <div className="mt-8 grid gap-8 xl:grid-cols-[0.9fr_1.1fr]">
+        <Seccion titulo="Funciones">
+          <Grilla
+            etiqueta="Funciones que coinciden con la búsqueda"
+            columnas={[
+              { titulo: 'Puesto', celda: (p: Puesto) => p.nombre, dato: true },
+              { titulo: 'Empresa', celda: (p: Puesto) => p.empresa, dato: true },
+            ]}
+            filas={funciones ?? []}
+            clave={(p) => p.id}
+            seleccion={{
+              modo: 'unica',
+              nombre: 'funcion',
+              seleccionadas: puestoId === null ? [] : [puestoId],
+              alCambiar: (ids) => elegirFuncion(Number(ids[0])),
+              etiquetaFila: (p) => `Seleccionar la función ${p.nombre}`,
+            }}
+            vacio={funciones === null ? 'Busque por empresa y nombre del puesto.' : 'No hay funciones que coincidan.'}
+          />
+        </Seccion>
+
+        <Seccion titulo="Candidatos evaluados">
+          <Grilla
+            etiqueta="Candidatos con cuestionario completo en la función seleccionada"
+            columnas={[
+              { titulo: 'Apellido', celda: (c: CandidatoEvaluado) => c.apellido, dato: true },
+              { titulo: 'Nombre', celda: (c: CandidatoEvaluado) => c.nombre, dato: true },
+              { titulo: 'Documento', celda: (c: CandidatoEvaluado) => `${c.tipoDocumento} ${c.nroDocumento}`, cifras: true },
+              { titulo: 'Nro candidato', celda: (c: CandidatoEvaluado) => c.nroCandidato, cifras: true },
+              { titulo: 'Finalizó', celda: (c: CandidatoEvaluado) => fecha(c.fechaFin), cifras: true },
+            ]}
+            filas={candidatos ?? []}
+            clave={(c) => c.cuestionarioId}
+            seleccion={{
+              modo: 'unica',
+              nombre: 'candidato',
+              seleccionadas: cuestionarioId === null ? [] : [cuestionarioId],
+              alCambiar: (ids) => setCuestionarioId(Number(ids[0])),
+              etiquetaFila: (c) => `Seleccionar a ${c.apellido}, ${c.nombre}`,
+            }}
+            vacio={puestoId === null ? 'Elija una función para ver sus candidatos evaluados.' : 'No hay candidatos evaluados en esta función.'}
+          />
+        </Seccion>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-        <form onSubmit={cargarComparativo} className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[260px] flex-1">
-            <label className="mb-1 block text-xs font-semibold text-slate-700">Puesto</label>
-            <select
-              value={puestoId}
-              onChange={(e) => setPuestoId(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-            >
-              {puestos.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.codigo} — {p.nombre} ({p.empresa})
-                </option>
-              ))}
-            </select>
-          </div>
-          <button
-            type="submit"
-            disabled={cargando}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-50"
-          >
-            {cargando ? 'Generando...' : 'Generar Comparativo'}
-          </button>
-        </form>
-      </section>
-
-      {reporte && (
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
-          <div className="border-b border-slate-200 px-5 py-3.5 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              {reporte.puestoNombre} · {reporte.empresa}
-            </span>
-            <span className="text-xs font-medium text-slate-600">
-              Evaluados completos: {todosEvaluados.length}
-            </span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                <tr>
-                  <th className="px-5 py-3">Candidato</th>
-                  <th className="px-5 py-3">Documento</th>
-                  <th className="px-5 py-3">Puntaje</th>
-                  <th className="px-5 py-3">Condición</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {todosEvaluados.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-5 py-8 text-center text-slate-500">
-                      Todavía no hay cuestionarios completos para comparar en este puesto.
-                    </td>
-                  </tr>
-                ) : (
-                  todosEvaluados.map((fila) => {
-                    const cumple = (reporte.ordenMerito ?? []).some(
-                      (m) => m.cuestionarioId === fila.cuestionarioId
-                    );
-                    return (
-                      <tr key={fila.cuestionarioId} className="hover:bg-slate-50/80">
-                        <td className="px-5 py-3.5 font-medium text-slate-900">
-                          {fila.apellido}, {fila.nombre}
-                        </td>
-                        <td className="px-5 py-3.5 text-slate-600">{fila.nroDocumento ?? '-'}</td>
-                        <td className="px-5 py-3.5 font-mono font-semibold text-slate-900">
-                          {fila.puntajeObtenido ?? '-'}
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                              cumple
-                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                                : 'bg-rose-50 text-rose-800 border border-rose-200'
-                            }`}
-                          >
-                            {cumple ? 'Cumple mínimos' : 'No alcanza mínimo'}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      <Modal
-        open={alerta.open}
-        title={alerta.title}
-        description={alerta.description}
-        variant={alerta.variant}
-        onClose={() => setAlerta((prev) => ({ ...prev, open: false }))}
+      <BarraAcciones
+        izquierda={<Boton onClick={cancelar}>Cancelar</Boton>}
+        derecha={
+          <Boton variante="principal" onClick={comparar} ocupado={comparando} textoOcupado="Comparando…" disabled={puestoId === null}>
+            Comparar
+          </Boton>
+        }
       />
-    </div>
+    </Hoja>
+  );
+}
+
+/** Pantalla 2: tabla y gráfico, listos para imprimir. */
+function HojaReporte({ reporte, alVolver }: { reporte: Reporte; alVolver: () => void }) {
+  useVolver(alVolver);
+  const cumplidas = reporte.competencias.filter((c) => c.cumple).length;
+
+  return (
+    <Hoja titulo="Reporte comparativo" cu="CU027">
+      <div className="grid gap-6 sm:grid-cols-2">
+        <BloqueDatos
+          titulo="Función"
+          filas={[
+            ['Empresa', reporte.empresa],
+            ['Puesto', reporte.puestoNombre],
+          ]}
+        />
+        <BloqueDatos
+          titulo="Candidato"
+          filas={[
+            ['Apellido y nombre', `${reporte.apellido}, ${reporte.nombre}`],
+            [reporte.tipoDocumento, <span key="d" className="cifras">{reporte.nroDocumento}</span>],
+            ['Nro candidato', <span key="n" className="cifras">{reporte.nroCandidato}</span>],
+          ]}
+        />
+      </div>
+      <p className="mt-5 text-cuerpo">
+        Cumple <strong className="cifras">{cumplidas}</strong> de <strong className="cifras">{reporte.competencias.length}</strong>{' '}
+        competencias del puesto. Puntaje total <strong className="cifras">{puntaje(reporte.puntajeTotal)}</strong>.
+      </p>
+
+      <div className="mt-6 grid gap-9">
+        <Grilla
+          etiqueta="Ponderación requerida y obtenida por competencia"
+          columnas={[
+            { titulo: 'Competencia', celda: (c: ItemComparativo) => c.competencia, dato: true },
+            { titulo: 'Requerido', celda: (c: ItemComparativo) => puntaje(c.requerido), cifras: true, alinear: 'derecha', ancho: '7rem' },
+            {
+              titulo: 'Obtenido',
+              celda: (c: ItemComparativo) => <span className="font-bold">{puntaje(c.obtenido)}</span>,
+              cifras: true,
+              alinear: 'derecha',
+              ancho: '7rem',
+            },
+            {
+              titulo: 'Diferencia',
+              celda: (c: ItemComparativo) => (
+                <span className={c.diferencia < 0 ? 'text-error' : 'text-cumple'}>{diferencia(c.diferencia)}</span>
+              ),
+              cifras: true,
+              alinear: 'derecha',
+              ancho: '7rem',
+            },
+            {
+              titulo: 'Estado',
+              celda: (c: ItemComparativo) => (
+                <span className={`font-bold ${c.cumple ? 'text-cumple' : 'text-error'}`}>{c.cumple ? 'Cumple' : 'No cumple'}</span>
+              ),
+              ancho: '7rem',
+            },
+          ]}
+          filas={reporte.competencias}
+          clave={(c) => c.competencia}
+        />
+        <GraficoComparativo items={reporte.competencias} />
+      </div>
+
+      <BarraAcciones
+        izquierda={<Boton onClick={alVolver}>Cancelar</Boton>}
+        derecha={
+          <Boton variante="principal" onClick={() => window.print()}>
+            Imprimir
+          </Boton>
+        }
+      />
+    </Hoja>
   );
 }

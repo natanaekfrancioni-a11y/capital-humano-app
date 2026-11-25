@@ -1,522 +1,381 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Modal } from '@/components/Modal';
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { useBusqueda } from '@/components/catalogo/useBusqueda';
+import { PantallaConsultor } from '@/components/shell/PantallaConsultor';
+import { useSalir } from '@/components/shell/useSalir';
+import { useVolver } from '@/components/shell/Volver';
+import { Boton } from '@/components/ui/Boton';
+import { CampoArea, CampoSeleccion, CampoTexto } from '@/components/ui/Campo';
+import { useAvisos } from '@/components/ui/Dialogo';
+import { Grilla } from '@/components/ui/Grilla';
+import { AvisoErrores, BarraAcciones, Hoja, Seccion, type ErroresFormulario } from '@/components/ui/Hoja';
+import { ApiError, api } from '@/lib/api';
+import { aNumero, puntaje } from '@/lib/formato';
+import type { Competencia, Puesto } from '@/lib/tipos';
+import { validar } from '@/lib/validacion';
 
-interface Competencia {
-  id: number;
-  codigo?: string;
-  nombre: string;
-}
-
-interface CompetenciaAsociadaForm {
-  competenciaId: string;
-  ponderacionMinima: string;
-}
-
-interface Puesto {
-  id: number;
-  codigo: string;
-  nombre: string;
-  empresa: string;
-  descripcion?: string;
-  competencias?: Array<{
-    id?: number;
-    ponderacionMinima?: number;
-    competencia?: Competencia;
-  }>;
-}
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
+type Filtros = { codigo: string; nombre: string; empresa: string };
+const buscarPuestos = (f: Filtros) => api.buscarPuestos(f);
 
 export default function PuestosPage() {
-  const [puestos, setPuestos] = useState<Puesto[]>([]);
-  const [competencias, setCompetencias] = useState<Competencia[]>([]);
-  const [filtroCodigo, setFiltroCodigo] = useState('');
-  const [filtroNombre, setFiltroNombre] = useState('');
-  const [filtroEmpresa, setFiltroEmpresa] = useState('');
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  return <PantallaConsultor>{(sesion) => <Puestos usuario={sesion.username} />}</PantallaConsultor>;
+}
 
-  // Modal alta puesto
-  const [modalAbierto, setModalAbierto] = useState(false);
-  const [codigo, setCodigo] = useState('');
-  const [nombre, setNombre] = useState('');
-  const [empresa, setEmpresa] = useState('');
-  const [descripcion, setDescripcion] = useState('');
-  const [itemsCompetencia, setItemsCompetencia] = useState<CompetenciaAsociadaForm[]>([
-    { competenciaId: '', ponderacionMinima: '5' },
-  ]);
-  const [guardando, setGuardando] = useState(false);
+/** CU008 - Gestionar puestos o funciones (invoca CU009, CU010 y CU011). */
+function Puestos({ usuario }: { usuario: string }) {
+  const avisos = useAvisos();
+  const salir = useSalir();
+  const [filtros, setFiltros] = useState<Filtros>({ codigo: '', nombre: '', empresa: '' });
+  const [formulario, setFormulario] = useState<{ puesto: Puesto | null } | null>(null);
+  const b = useBusqueda(buscarPuestos);
+  const { refrescar } = b;
+  const hayFiltro = Object.values(filtros).some((v) => v.trim() !== '');
 
-  // Modal alerta / error
-  const [alerta, setAlerta] = useState<{
-    open: boolean;
-    title: string;
-    description: string;
-    variant: 'default' | 'danger' | 'success';
-  }>({ open: false, title: '', description: '', variant: 'default' });
-
-  async function cargarDatos() {
-    setLoading(true);
-    setError(null);
+  // CU011 - Dar de baja un puesto: primero se constata que no tenga evaluaciones.
+  async function eliminar() {
+    const p = b.seleccionado;
+    if (!p) return;
     try {
-      const params = new URLSearchParams();
-      if (filtroCodigo.trim()) params.set('codigo', filtroCodigo.trim());
-      if (filtroNombre.trim()) params.set('nombre', filtroNombre.trim());
-      if (filtroEmpresa.trim()) params.set('empresa', filtroEmpresa.trim());
-
-      const [resPuestos, resComp] = await Promise.all([
-        fetch(`${API_URL}/api/catalogo/puestos${params.toString() ? `?${params.toString()}` : ''}`),
-        fetch(`${API_URL}/api/catalogo/competencias`),
-      ]);
-
-      if (!resPuestos.ok) throw new Error(`Error al cargar puestos (${resPuestos.status})`);
-      if (!resComp.ok) throw new Error(`Error al cargar competencias (${resComp.status})`);
-
-      const dataPuestos: Puesto[] = await resPuestos.json();
-      const dataComp: Competencia[] = await resComp.json();
-      setPuestos(dataPuestos);
-      setCompetencias(dataComp);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al consultar el catálogo');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    cargarDatos();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function abrirAlta() {
-    setCodigo('');
-    setNombre('');
-    setEmpresa('');
-    setDescripcion('');
-    setItemsCompetencia([
-      { competenciaId: competencias[0]?.id ? String(competencias[0].id) : '', ponderacionMinima: '5' },
-    ]);
-    setModalAbierto(true);
-  }
-
-  function agregarFilaCompetencia() {
-    setItemsCompetencia((prev) => [
-      ...prev,
-      { competenciaId: competencias[0]?.id ? String(competencias[0].id) : '', ponderacionMinima: '5' },
-    ]);
-  }
-
-  function actualizarFilaCompetencia(
-    index: number,
-    campo: keyof CompetenciaAsociadaForm,
-    valor: string
-  ) {
-    setItemsCompetencia((prev) =>
-      prev.map((fila, idx) => (idx === index ? { ...fila, [campo]: valor } : fila))
-    );
-  }
-
-  function quitarFilaCompetencia(index: number) {
-    setItemsCompetencia((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== index) : prev));
-  }
-
-  async function guardarPuesto(e: React.FormEvent) {
-    e.preventDefault();
-
-    const faltantes: string[] = [];
-    if (!codigo.trim()) faltantes.push('Código');
-    if (!nombre.trim()) faltantes.push('Nombre (*)');
-    if (!empresa.trim()) faltantes.push('Empresa (*)');
-    if (!descripcion.trim()) faltantes.push('Descripción');
-
-    const competenciasValidas = itemsCompetencia
-      .filter((c) => c.competenciaId && c.ponderacionMinima !== '')
-      .map((c) => ({
-        competenciaId: Number(c.competenciaId),
-        ponderacionMinima: Number(c.ponderacionMinima),
-      }));
-
-    if (competenciasValidas.length === 0) {
-      faltantes.push('Competencias asociadas');
-    }
-
-    if (faltantes.length > 0) {
-      setAlerta({
-        open: true,
-        title: 'Omisión en Campos',
-        description: `Los siguientes campos son obligatorios: [${faltantes.join(', ')}]. Es necesario completarlos para continuar.`,
-        variant: 'danger',
-      });
-      return;
-    }
-
-    setGuardando(true);
-    try {
-      const res = await fetch(`${API_URL}/api/catalogo/puestos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          codigo: codigo.trim(),
-          nombre: nombre.trim(),
-          empresa: empresa.trim(),
-          descripcion: descripcion.trim(),
-          competencias: competenciasValidas,
-        }),
-      });
-
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        const msg =
-          data?.message ||
-          (Array.isArray(data?.errors) ? data.errors.join(' · ') : null) ||
-          `Error al guardar el puesto (${res.status})`;
-        setAlerta({
-          open: true,
-          title: 'No se pudo guardar el puesto',
-          description: msg,
-          variant: 'danger',
-        });
+      const uso = await api.puestoEnUso(p.id);
+      if (uso.enUso) {
+        await avisos.abrir({ tipo: 'error', titulo: 'No se puede eliminar', mensaje: uso.mensaje, cualquierTecla: true });
         return;
       }
+      const ok = await avisos.confirmar('Baja de puesto', uso.mensaje, { aceptar: 'Eliminar', rechazar: 'Cancelar', peligro: true });
+      if (!ok) return;
+      await api.bajaPuesto(p.id, usuario);
+      b.setSeleccion(null);
+      await avisos.informar('Puesto eliminado', `Los datos del puesto ${p.nombre} han sido eliminados del sistema.`, { cualquierTecla: true });
+      await refrescar();
+    } catch (e) {
+      await avisos.error(e, 'No se pudo eliminar el puesto');
+    }
+  }
 
-      setModalAbierto(false);
-      setAlerta({
-        open: true,
-        title: 'Puesto creado',
-        description: `El puesto "${data?.nombre ?? nombre.trim()}" se registró correctamente.`,
-        variant: 'success',
+  const terminar = useCallback(
+    (huboCambios: boolean) => {
+      setFormulario(null);
+      if (huboCambios) refrescar();
+    },
+    [refrescar],
+  );
+
+  if (formulario) {
+    return <FormularioPuesto key={formulario.puesto?.id ?? 'alta'} puesto={formulario.puesto} alTerminar={terminar} />;
+  }
+
+  return (
+    <Hoja titulo="Puestos" cu="CU008" bajada="Buscar puestos o funciones para modificarlos o darlos de baja, o crear uno nuevo.">
+      <form
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          if (hayFiltro) b.ejecutar(filtros);
+        }}
+        className="grid items-end gap-4 md:grid-cols-[0.7fr_1.2fr_1fr_auto]"
+      >
+        <CampoTexto etiqueta="Código" valor={filtros.codigo} alCambiar={(v) => setFiltros((f) => ({ ...f, codigo: v }))} maxLength={20} />
+        <CampoTexto
+          etiqueta="Nombre del puesto"
+          valor={filtros.nombre}
+          alCambiar={(v) => setFiltros((f) => ({ ...f, nombre: v }))}
+          maxLength={100}
+        />
+        <CampoTexto etiqueta="Empresa" valor={filtros.empresa} alCambiar={(v) => setFiltros((f) => ({ ...f, empresa: v }))} maxLength={100} />
+        <Boton type="submit" disabled={!hayFiltro} ocupado={b.buscando} textoOcupado="Buscando…" title={hayFiltro ? undefined : 'Complete al menos un criterio'}>
+          Buscar
+        </Boton>
+      </form>
+      {!hayFiltro && <p className="mt-2 text-chica text-grafito-claro">Complete al menos un criterio para buscar.</p>}
+
+      <div className="mt-7">
+        <Grilla
+          etiqueta="Puestos encontrados"
+          columnas={[
+            { titulo: 'Código', celda: (p: Puesto) => p.codigo, dato: true, ancho: '10rem' },
+            { titulo: 'Nombre del puesto', celda: (p: Puesto) => p.nombre, dato: true },
+            { titulo: 'Empresa', celda: (p: Puesto) => p.empresa, dato: true },
+          ]}
+          filas={b.resultados ?? []}
+          clave={(p) => p.id}
+          seleccion={{
+            modo: 'unica',
+            nombre: 'puesto',
+            seleccionadas: b.seleccion === null ? [] : [b.seleccion],
+            alCambiar: (ids) => b.setSeleccion(Number(ids[0])),
+            etiquetaFila: (p) => `Seleccionar el puesto ${p.nombre}`,
+          }}
+          vacio={b.resultados === null ? 'Complete un criterio y presione Buscar.' : 'No hay puestos que coincidan.'}
+        />
+      </div>
+
+      <BarraAcciones
+        izquierda={<Boton onClick={salir}>Salir</Boton>}
+        derecha={
+          <>
+            <Boton disabled={!b.seleccionado} onClick={() => b.seleccionado && setFormulario({ puesto: b.seleccionado })}>
+              Modificar
+            </Boton>
+            <Boton disabled={!b.seleccionado} onClick={eliminar}>
+              Eliminar
+            </Boton>
+            <Boton variante="principal" onClick={() => setFormulario({ puesto: null })}>
+              Nuevo
+            </Boton>
+          </>
+        }
+      />
+    </Hoja>
+  );
+}
+
+interface FilaCompetencia {
+  competenciaId: number;
+  nombre: string;
+  ponderacion: number;
+}
+
+/** CU009 - Dar de alta puesto / CU010 - Modificar puesto */
+function FormularioPuesto({ puesto, alTerminar }: { puesto: Puesto | null; alTerminar: (huboCambios: boolean) => void }) {
+  const avisos = useAvisos();
+  const esAlta = puesto === null;
+  const avisoRef = useRef<HTMLDivElement>(null);
+  const empresasId = useId();
+  const [competencias, setCompetencias] = useState<Competencia[]>([]);
+  const [empresas, setEmpresas] = useState<string[]>([]);
+  const [codigo, setCodigo] = useState(puesto?.codigo ?? '');
+  const [nombre, setNombre] = useState(puesto?.nombre ?? '');
+  const [empresa, setEmpresa] = useState(puesto?.empresa ?? '');
+  const [descripcion, setDescripcion] = useState(puesto?.descripcion ?? '');
+  const [filas, setFilas] = useState<FilaCompetencia[]>(
+    () =>
+      puesto?.competencias.map((pc) => ({
+        competenciaId: pc.competencia.id,
+        nombre: pc.competencia.nombre,
+        ponderacion: pc.ponderacionMinima,
+      })) ?? [],
+  );
+  const [nuevaCompetencia, setNuevaCompetencia] = useState('');
+  const [nuevaPonderacion, setNuevaPonderacion] = useState('');
+  const [errorAgregar, setErrorAgregar] = useState<string | null>(null);
+  const [errores, setErrores] = useState<ErroresFormulario | null>(null);
+  const [porCampo, setPorCampo] = useState<Record<string, string>>({});
+  const [guardando, setGuardando] = useState(false);
+
+  const cancelar = useCallback(async () => {
+    const cambios = esAlta && (codigo || nombre || empresa || descripcion || filas.length > 0);
+    if (cambios) {
+      const ok = await avisos.confirmar('Cancelar el alta', '¿Desea cancelar el alta? Los datos ingresados se perderán.', {
+        aceptar: 'Sí, cancelar',
+        rechazar: 'No',
       });
-      await cargarDatos();
+      if (!ok) return;
+    }
+    alTerminar(false);
+  }, [esAlta, codigo, nombre, empresa, descripcion, filas.length, avisos, alTerminar]);
+
+  useVolver(cancelar);
+  useEffect(() => {
+    if (errores) avisoRef.current?.focus();
+  }, [errores]);
+
+  useEffect(() => {
+    Promise.all([api.buscarCompetencias(), api.buscarPuestos()])
+      .then(([c, p]) => {
+        setCompetencias(c);
+        setEmpresas([...new Set(p.map((x) => x.empresa))].sort());
+      })
+      .catch((e) => avisos.error(e, 'No se pudieron cargar las competencias'));
+  }, [avisos]);
+
+  // Botón "+": valida competencia y ponderación y las agrega a la grilla.
+  function agregar() {
+    const comp = competencias.find((c) => c.id === Number(nuevaCompetencia));
+    const pond = aNumero(nuevaPonderacion);
+    if (!comp || nuevaPonderacion.trim() === '') {
+      setErrorAgregar('Para agregar, elija una competencia y cargue su ponderación.');
+      return;
+    }
+    if (Number.isNaN(pond) || pond < 0 || pond > 10) {
+      setErrorAgregar('La ponderación es un valor entre 0 y 10.');
+      return;
+    }
+    if (filas.some((f) => f.competenciaId === comp.id)) {
+      setErrorAgregar('Cada competencia puede estar una sola vez en el puesto.');
+      return;
+    }
+    setFilas((f) => [...f, { competenciaId: comp.id, nombre: comp.nombre, ponderacion: pond }]);
+    setNuevaCompetencia('');
+    setNuevaPonderacion('');
+    setErrorAgregar(null);
+  }
+
+  async function aceptar(e: FormEvent) {
+    e.preventDefault();
+    const r = validar([
+      { campo: 'Código', valor: codigo, obligatorio: true, maximo: 30 },
+      { campo: 'Nombre del puesto', valor: nombre, obligatorio: true, maximo: 100 },
+      { campo: 'Empresa', valor: empresa, obligatorio: true, maximo: 100 },
+      { campo: 'Descripción', valor: descripcion, obligatorio: true, maximo: 300 },
+    ]);
+    const mensajes = [...r.mensajes];
+    if (filas.length === 0) mensajes.push('Debe asociar al menos una competencia con su ponderación (botón Agregar).');
+    setPorCampo(r.porCampo);
+    if (mensajes.length) {
+      setErrores({ titulo: 'No se puede guardar el puesto', items: mensajes });
+      return;
+    }
+    setErrores(null);
+    setGuardando(true);
+    const datos = {
+      nombre: nombre.trim(),
+      empresa: empresa.trim(),
+      descripcion: descripcion.trim(),
+      competencias: filas.map((f) => ({ competenciaId: f.competenciaId, ponderacionMinima: f.ponderacion })),
+    };
+    try {
+      if (esAlta) {
+        await api.crearPuesto({ codigo: codigo.trim(), ...datos });
+        const otro = await avisos.abrir({
+          tipo: 'informativa',
+          titulo: 'Puesto guardado',
+          mensaje: `El puesto ${datos.nombre} se ha creado correctamente. ¿Desea cargar otro?`,
+          aceptar: 'Sí',
+          rechazar: 'No',
+        });
+        if (otro) {
+          setCodigo('');
+          setNombre('');
+          setEmpresa('');
+          setDescripcion('');
+          setFilas([]);
+        } else {
+          alTerminar(true);
+        }
+      } else {
+        await api.modificarPuesto(puesto.id, datos);
+        await avisos.informar('Puesto modificado', 'La operación ha culminado con éxito.');
+        alTerminar(true);
+      }
     } catch (err) {
-      setAlerta({
-        open: true,
-        title: 'Error de conexión',
-        description: err instanceof Error ? err.message : 'Error al comunicarse con la API',
-        variant: 'danger',
-      });
+      if (err instanceof ApiError && !err.sinConexion) setErrores({ titulo: err.message, items: err.detalles });
+      else await avisos.error(err, 'No se pudo guardar el puesto');
     } finally {
       setGuardando(false);
     }
   }
 
-  const puestoSeleccionado = puestos.find((p) => p.id === selectedId) ?? null;
+  const disponibles = competencias.filter((c) => !filas.some((f) => f.competenciaId === c.id));
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Puestos</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Administrá los puestos por empresa y sus competencias mínimas requeridas.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={abrirAlta}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-xs transition hover:bg-slate-800"
-          >
-            Nuevo
-          </button>
-          <button
-            type="button"
-            disabled={!puestoSeleccionado}
-            onClick={() =>
-              setAlerta({
-                open: true,
-                title: 'Edición de puesto',
-                description: `Seleccionaste "${puestoSeleccionado?.nombre}". La edición directa de puestos se conectará en el próximo paso.`,
-                variant: 'default',
-              })
-            }
-            className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            Modificar
-          </button>
-          <button
-            type="button"
-            disabled={!puestoSeleccionado}
-            onClick={() =>
-              setAlerta({
-                open: true,
-                title: 'Baja de puesto',
-                description: `Seleccionaste "${puestoSeleccionado?.nombre}". Podés confirmar la baja lógica en el siguiente bloque.`,
-                variant: 'danger',
-              })
-            }
-            className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            Eliminar
-          </button>
-        </div>
-      </div>
-
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            cargarDatos();
-          }}
-          className="grid grid-cols-1 gap-3 sm:grid-cols-4"
-        >
-          <input
-            type="text"
-            placeholder="Código"
-            value={filtroCodigo}
-            onChange={(e) => setFiltroCodigo(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none"
+    <Hoja
+      titulo={esAlta ? 'Alta de puesto' : 'Modificar puesto'}
+      cu={esAlta ? 'CU009' : 'CU010'}
+      bajada={esAlta ? 'Los campos con * son obligatorios.' : 'El código no se puede modificar.'}
+    >
+      <form onSubmit={aceptar} noValidate>
+        <AvisoErrores titulo={errores?.titulo ?? null} items={errores?.items} refAviso={avisoRef} />
+        <div className="grid gap-5 md:grid-cols-[0.6fr_1.4fr_1fr]">
+          <CampoTexto etiqueta="Código" obligatorio valor={codigo} alCambiar={setCodigo} maximo={30} error={porCampo['Código']} disabled={!esAlta} />
+          <CampoTexto
+            etiqueta="Nombre del puesto"
+            obligatorio
+            valor={nombre}
+            alCambiar={setNombre}
+            maximo={100}
+            error={porCampo['Nombre del puesto']}
           />
-          <input
-            type="text"
-            placeholder="Nombre puesto"
-            value={filtroNombre}
-            onChange={(e) => setFiltroNombre(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none"
+          <CampoTexto
+            etiqueta="Empresa"
+            obligatorio
+            valor={empresa}
+            alCambiar={setEmpresa}
+            maximo={100}
+            list={empresasId}
+            error={porCampo['Empresa']}
+            ayuda="Puede elegir una empresa existente o escribir una nueva."
           />
-          <input
-            type="text"
-            placeholder="Empresa"
-            value={filtroEmpresa}
-            onChange={(e) => setFiltroEmpresa(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none"
-          />
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              className="flex-1 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-            >
-              Buscar
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setFiltroCodigo('');
-                setFiltroNombre('');
-                setFiltroEmpresa('');
-                setTimeout(() => cargarDatos(), 0);
-              }}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
-            >
-              Limpiar
-            </button>
-          </div>
-        </form>
-      </section>
-
-      {loading && (
-        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-xs">
-          Cargando puestos...
-        </div>
-      )}
-
-      {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {!loading && !error && (
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
-          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Resultados búsqueda ({puestos.length})
-            </span>
-            {puestoSeleccionado && (
-              <span className="text-xs font-medium text-slate-700">
-                Seleccionado: {puestoSeleccionado.codigo} — {puestoSeleccionado.nombre}
-              </span>
-            )}
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                <tr>
-                  <th className="px-4 py-3 w-12">Sel.</th>
-                  <th className="px-5 py-3">Código</th>
-                  <th className="px-5 py-3">Nombre Puesto</th>
-                  <th className="px-5 py-3">Empresa</th>
-                  <th className="px-5 py-3">Competencias</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {puestos.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
-                      No hay puestos registrados con esos filtros. Podés crear uno con &ldquo;Nuevo&rdquo;.
-                    </td>
-                  </tr>
-                ) : (
-                  puestos.map((p) => {
-                    const checked = selectedId === p.id;
-                    return (
-                      <tr
-                        key={p.id}
-                        onClick={() => setSelectedId(checked ? null : p.id)}
-                        className={`cursor-pointer transition ${
-                          checked ? 'bg-rose-50/80' : 'hover:bg-slate-50/80'
-                        }`}
-                      >
-                        <td className="px-4 py-3.5">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => setSelectedId(checked ? null : p.id)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
-                          />
-                        </td>
-                        <td className="px-5 py-3.5 font-mono text-xs font-medium text-slate-700">
-                          {p.codigo}
-                        </td>
-                        <td className="px-5 py-3.5 font-medium text-slate-900">{p.nombre}</td>
-                        <td className="px-5 py-3.5 text-slate-600">{p.empresa}</td>
-                        <td className="px-5 py-3.5">
-                          <div className="flex flex-wrap gap-1.5">
-                            {(p.competencias ?? []).length === 0 ? (
-                              <span className="text-xs text-slate-400">Sin detalle</span>
-                            ) : (
-                              (p.competencias ?? []).map((comp, i) => (
-                                <span
-                                  key={comp.id ?? i}
-                                  className="inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700"
-                                >
-                                  {comp.competencia?.nombre ?? 'Competencia'}
-                                  {comp.ponderacionMinima !== undefined
-                                    ? ` (${comp.ponderacionMinima})`
-                                    : ''}
-                                </span>
-                              ))
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      <Modal
-        open={modalAbierto}
-        title="ALTA DE PUESTO"
-        description="Completá los datos del puesto y asigná al menos una competencia con ponderación mínima."
-        confirmLabel={guardando ? 'Guardando...' : 'Aceptar'}
-        cancelLabel="Cancelar"
-        onClose={() => setModalAbierto(false)}
-        onConfirm={() => {
-          const form = document.getElementById('form-alta-puesto') as HTMLFormElement | null;
-          form?.requestSubmit();
-        }}
-      >
-        <form id="form-alta-puesto" onSubmit={guardarPuesto} className="space-y-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">Código</label>
-              <input
-                type="text"
-                placeholder="Ej. PUE-0125"
-                value={codigo}
-                onChange={(e) => setCodigo(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">Empresa (*)</label>
-              <input
-                type="text"
-                placeholder="Ej. Empresa A"
-                value={empresa}
-                onChange={(e) => setEmpresa(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-700">Nombre (*)</label>
-            <input
-              type="text"
-              placeholder="Ej. Desarrollador Backend Senior"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-700">Descripción</label>
-            <textarea
-              rows={2}
-              placeholder="Responsabilidades principales del puesto..."
-              value={descripcion}
-              onChange={(e) => setDescripcion(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
-            />
-          </div>
-
-          <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-700">Competencias asociadas</span>
-              <button
-                type="button"
-                onClick={agregarFilaCompetencia}
-                className="rounded-md bg-slate-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-800"
-              >
-                + Agregar
-              </button>
-            </div>
-
-            {itemsCompetencia.map((fila, idx) => (
-              <div key={idx} className="grid grid-cols-12 gap-2">
-                <select
-                  value={fila.competenciaId}
-                  onChange={(e) => actualizarFilaCompetencia(idx, 'competenciaId', e.target.value)}
-                  className="col-span-7 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900"
-                >
-                  <option value="">Seleccionar competencia</option>
-                  {competencias.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0"
-                  max="10"
-                  placeholder="Pond."
-                  value={fila.ponderacionMinima}
-                  onChange={(e) => actualizarFilaCompetencia(idx, 'ponderacionMinima', e.target.value)}
-                  className="col-span-3 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900"
-                />
-                <button
-                  type="button"
-                  onClick={() => quitarFilaCompetencia(idx)}
-                  className="col-span-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-100"
-                >
-                  ×
-                </button>
-              </div>
+          <datalist id={empresasId}>
+            {empresas.map((e) => (
+              <option key={e} value={e} />
             ))}
-          </div>
-        </form>
-      </Modal>
+          </datalist>
+          <CampoArea
+            className="md:col-span-3"
+            etiqueta="Descripción"
+            obligatorio
+            valor={descripcion}
+            alCambiar={setDescripcion}
+            maximo={300}
+            error={porCampo['Descripción']}
+          />
+        </div>
 
-      <Modal
-        open={alerta.open}
-        title={alerta.title}
-        description={alerta.description}
-        variant={alerta.variant}
-        onClose={() => setAlerta((prev) => ({ ...prev, open: false }))}
-      />
-    </div>
+        <div className="mt-8">
+          <Seccion titulo="Competencias del puesto">
+            <div className="grid items-end gap-4 sm:grid-cols-[1fr_9rem_auto]">
+              <CampoSeleccion
+                etiqueta="Competencia"
+                valor={nuevaCompetencia}
+                alCambiar={setNuevaCompetencia}
+                opciones={disponibles.map((c) => ({ valor: String(c.id), texto: c.nombre }))}
+              />
+              <CampoTexto
+                etiqueta="Ponderación (0 a 10)"
+                valor={nuevaPonderacion}
+                alCambiar={(v) => setNuevaPonderacion(v.replace(/[^\d.,]/g, ''))}
+                inputMode="decimal"
+                mayusculas={false}
+              />
+              <Boton onClick={agregar}>Agregar</Boton>
+            </div>
+            {errorAgregar && <p className="mt-2 text-chica font-bold text-error" role="alert">{errorAgregar}</p>}
+
+            <div className="mt-5">
+              <Grilla
+                etiqueta="Competencias y ponderación mínima requerida"
+                columnas={[
+                  { titulo: 'Competencia', celda: (f: FilaCompetencia) => f.nombre, dato: true },
+                  {
+                    titulo: 'Ponderación',
+                    celda: (f: FilaCompetencia) => puntaje(f.ponderacion),
+                    cifras: true,
+                    alinear: 'derecha',
+                    ancho: '9rem',
+                  },
+                  {
+                    titulo: 'Quitar',
+                    celda: (f: FilaCompetencia) => (
+                      <button
+                        type="button"
+                        onClick={() => setFilas((l) => l.filter((x) => x.competenciaId !== f.competenciaId))}
+                        className="h-8 rounded-[4px] px-2 text-chica font-bold underline decoration-linea underline-offset-4 hover:decoration-tinta"
+                        aria-label={`Quitar ${f.nombre}`}
+                      >
+                        Quitar
+                      </button>
+                    ),
+                    alinear: 'derecha',
+                    ancho: '7rem',
+                  },
+                ]}
+                filas={filas}
+                clave={(f) => f.competenciaId}
+                vacio="Todavía no se agregaron competencias."
+              />
+            </div>
+          </Seccion>
+        </div>
+
+        <BarraAcciones
+          izquierda={<Boton onClick={cancelar}>Cancelar</Boton>}
+          derecha={
+            <Boton type="submit" variante="principal" ocupado={guardando} textoOcupado="Guardando…">
+              Aceptar
+            </Boton>
+          }
+        />
+      </form>
+    </Hoja>
   );
 }
