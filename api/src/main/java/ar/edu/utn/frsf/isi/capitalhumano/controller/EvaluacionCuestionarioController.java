@@ -1,11 +1,9 @@
 package ar.edu.utn.frsf.isi.capitalhumano.controller;
 
 import ar.edu.utn.frsf.isi.capitalhumano.model.Candidato;
-import ar.edu.utn.frsf.isi.capitalhumano.model.ConfiguracionCuestionario;
 import ar.edu.utn.frsf.isi.capitalhumano.model.Cuestionario;
 import ar.edu.utn.frsf.isi.capitalhumano.service.EvaluacionCuestionarioService;
 import ar.edu.utn.frsf.isi.capitalhumano.service.EvaluacionCuestionarioService.RespuestaItemInput;
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -24,54 +22,50 @@ import org.springframework.web.bind.annotation.RestController;
 @CrossOrigin(origins = "*")
 public class EvaluacionCuestionarioController {
 
-    private final EvaluacionCuestionarioService service;
+    private final EvaluacionCuestionarioService evaluacionService;
 
-    public EvaluacionCuestionarioController(EvaluacionCuestionarioService service) {
-        this.service = service;
+    public EvaluacionCuestionarioController(EvaluacionCuestionarioService evaluacionService) {
+        this.evaluacionService = evaluacionService;
     }
 
     public record GenerarEvaluacionesRequest(List<Long> candidatoIds, Long puestoId) {}
 
-    public record ResponderBloqueRequest(Integer nroBloque, List<RespuestaItemInput> respuestas) {}
+    public record ResponderBloqueRequest(List<RespuestaItemInput> respuestas) {}
 
     @GetMapping("/candidatos")
     public ResponseEntity<List<Candidato>> buscarCandidatos(
             @RequestParam(required = false) String apellido,
             @RequestParam(required = false) String nombre,
             @RequestParam(required = false) String nroCandidato) {
-        return ResponseEntity.ok(service.buscarCandidatos(apellido, nombre, nroCandidato));
+        return ResponseEntity.ok(evaluacionService.buscarCandidatos(apellido, nombre, nroCandidato));
     }
 
     @PostMapping("/generar")
     public ResponseEntity<List<Cuestionario>> generarEvaluaciones(@RequestBody GenerarEvaluacionesRequest req) {
-        List<Cuestionario> creados = service.generarEvaluaciones(req.candidatoIds(), req.puestoId());
+        List<Cuestionario> creados = evaluacionService.generarEvaluaciones(
+                req != null ? req.candidatoIds() : null,
+                req != null ? req.puestoId() : null
+        );
         return ResponseEntity.status(HttpStatus.CREATED).body(creados);
     }
 
-    @PostMapping("/cuestionarios/{cuestionarioId}/iniciar-o-sortear")
-    public ResponseEntity<Cuestionario> iniciarOSortear(@PathVariable Long cuestionarioId) {
-        return ResponseEntity.ok(service.iniciarOSortearCuestionario(cuestionarioId));
+    @PostMapping("/cuestionarios/{id}/iniciar")
+    public ResponseEntity<Cuestionario> iniciarOSortear(@PathVariable Long id) {
+        return ResponseEntity.ok(evaluacionService.iniciarOSortearCuestionario(id));
     }
 
-    @PostMapping("/cuestionarios/{cuestionarioId}/responder-bloque")
+    @PostMapping("/cuestionarios/{id}/bloques/{nroBloque}/responder")
     public ResponseEntity<Cuestionario> responderBloque(
-            @PathVariable Long cuestionarioId,
+            @PathVariable Long id,
+            @PathVariable Integer nroBloque,
             @RequestBody ResponderBloqueRequest req) {
-        return ResponseEntity.ok(service.responderBloque(cuestionarioId, req.nroBloque(), req.respuestas()));
+        return ResponseEntity.ok(
+                evaluacionService.responderBloque(id, nroBloque, req != null ? req.respuestas() : null)
+        );
     }
 
-    @PostMapping("/cuestionarios/calcular-puntaje")
-    public ResponseEntity<BigDecimal> calcularPuntajeTotal(@RequestBody Cuestionario cuestionario) {
-        return ResponseEntity.ok(service.calcularPuntajeTotal(cuestionario));
-    }
-
-    @GetMapping("/puestos/{puestoId}/orden-merito")
-    public ResponseEntity<Map<String, Object>> emitirOrdenDeMerito(@PathVariable Long puestoId) {
-        return ResponseEntity.ok(service.emitirOrdenDeMerito(puestoId));
-    }
-
-    @GetMapping("/configuracion")
-    public ResponseEntity<ConfiguracionCuestionario> obtenerConfiguracion() {
-        return ResponseEntity.ok(service.obtenerConfiguracion());
+    @GetMapping("/orden-merito")
+    public ResponseEntity<Map<String, Object>> emitirOrdenDeMerito(@RequestParam Long puestoId) {
+        return ResponseEntity.ok(evaluacionService.emitirOrdenDeMerito(puestoId));
     }
 }

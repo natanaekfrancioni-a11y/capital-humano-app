@@ -1,5 +1,6 @@
 package ar.edu.utn.frsf.isi.capitalhumano.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -12,6 +13,7 @@ public class Factor {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "competencia_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Competencia competencia;
 
     @Column(nullable = false, unique = true, length = 30)
