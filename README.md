@@ -2,8 +2,6 @@
 
 Trabajo Práctico Integrador de **Diseño de Sistemas de Información** y **Desarrollo de Software** — **UTN FRSF (2026)**.
 
-> **Rama `entrega-dsi`:** versión para la entrega de Diseño de Sistemas de Información. Tiene solo los casos de uso que pide el cronograma de DSI (CU020, CU021, CU023, CU025, CU026 y CU028) y los que esos casos de uso necesitan para funcionar: CU001 (el candidato ingresa por ahí al CU026), CU022 (se llega desde el CU020) y CU033 (botón "Generar con IA" del CU021, flujo alternativo 1.A.1).
-
 ## Alcance y Funcionalidades Implementadas
 
 * **Autenticación (CU001):** ingreso como consultor (usuario y contraseña) o para realizar un cuestionario (documento y clave).
@@ -130,40 +128,6 @@ Los errores de negocio responden `400` con `{ "error": "...", "detalles": ["..."
 | CU028 | `GET /api/reportes/orden-merito?puestoId=&evaluacion=TODAS&emitidoPor=` |
 
 Una **evaluación** es el grupo de cuestionarios que se generan juntos en el CU025 para un puesto: comparten la fecha de creación y se numeran `EVA-001`, `EVA-002`, ... por puesto.
-
-## Patrones de diseño
-
-| Patrón | Dónde está | Para qué se usa |
-|---|---|---|
-| **DAO** | `api/.../dao/*Dao` | Los servicios leen y guardan solo a través de estas interfaces (Spring Data JPA); no conocen SQL ni la base. |
-| **Template Method** | `service/baja/BajaLogica` y su subclase `BajaPregunta` | La baja lógica de pregunta (CU023) sigue pasos fijos en un orden fijo: buscar, verificar que no esté en uso, dar de baja lo asociado, desactivar, guardar y auditar. `ejecutar` es el método plantilla (final); la subclase completa solo lo que depende de la entidad. |
-| **State** | `service/estado/`: `EstadoCuestionario`, `EstadoActivo`, `EstadoEnProceso` y los estados finales | Lo que se puede hacer con un cuestionario (vencer, ingresar, responder, completar) depende de su estado. Cada estado tiene sus reglas y hace sus propias transiciones, sin `if` por estado en los servicios. |
-| **Strategy** | `service/ProveedorIA` (estrategia), `ClienteGemini` (estrategia concreta), `GeneradorPreguntaIAService` (contexto) | El CU033 no depende de Gemini: usar otro proveedor de IA es agregar otra clase que implemente `ProveedorIA`. En los tests se usa un proveedor falso. |
-
-**Herencia y polimorfismo:** `BajaLogica<T>` es abstracta y `BajaPregunta` la extiende; `CatalogoService` la usa como `BajaLogica<Pregunta>`. `EstadoBase` define el comportamiento de un estado final y `EstadoActivo` y `EstadoEnProceso` redefinen lo que les corresponde; `EvaluacionCuestionarioService` llama a `estado.registrarIngreso(...)` o `estado.completar(...)` sin preguntar en qué estado está el cuestionario.
-
-## Pruebas unitarias y cobertura
-
-Pruebas de la capa de servicio con **JUnit 5 + Mockito** (113 tests). No necesitan PostgreSQL ni la clave de Gemini: los DAOs se reemplazan con mocks y la API de Gemini con un servidor HTTP local.
-
-```bash
-cd api
-mvn test
-```
-
-Al terminar, el informe de cobertura de **JaCoCo** queda en `api/target/site/jacoco/index.html`. Para ver cada archivo, entrá al paquete `ar.edu.utn.frsf.isi.capitalhumano.service` (y a sus subpaquetes `baja` y `estado`). Desde IntelliJ también se puede: clic derecho en `api/src/test/java` → **More Run/Debug** → **Run 'All Tests' with Coverage**.
-
-| Clase de test | Qué prueba |
-|---|---|
-| `CatalogoServiceTest` | CU020 a CU023 (búsqueda, alta, modificación y baja de preguntas) y las búsquedas de competencias, factores, opciones de respuesta y puestos |
-| `EvaluacionCuestionarioServiceTest` | CU025 (validaciones, claves y generación de cuestionarios) y CU026 (sorteo de preguntas, bloques y puntaje) |
-| `VigenciaCuestionarioServiceTest`, `estado/EstadosCuestionarioTest` | Vencimientos de CU026 y transiciones de estado (State) |
-| `ReporteServiceTest` | CU028 Orden de mérito |
-| `GeneradorPreguntaIAServiceTest`, `ClienteGeminiTest` | CU033 (Strategy): el servicio con un proveedor de IA falso, y el cliente de Gemini contra un servidor local |
-| `AuthServiceTest` | CU001 Autenticar usuario |
-| `baja/BajaLogicaTest` | El orden fijo de los pasos de una baja (Template Method) |
-
-Los mocks usan el modo estricto de Mockito (`MockitoExtension`): un test falla si prepara una respuesta que el servicio nunca usa, o si el servicio llama a un método preparado pero con otros datos.
 
 ## Diseño del Frontend
 
