@@ -59,7 +59,7 @@ export function Grilla<T>({ etiqueta, columnas, filas, clave, seleccion, vacio, 
   return (
     <div className="min-w-0">
       <div
-        className="overflow-x-auto border-y border-linea"
+        className="relative overflow-x-auto border-y border-linea"
         style={altoMaximo ? { maxHeight: altoMaximo, overflowY: 'auto' } : undefined}
       >
         <table className="w-full border-collapse text-chica">

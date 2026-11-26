@@ -40,10 +40,14 @@ export function BarraAcciones({ izquierda, derecha }: { izquierda?: ReactNode; d
   );
 }
 
-/** Subtítulo de sección dentro de una hoja. */
+/**
+ * Subtítulo de sección dentro de una hoja.
+ * min-w-0: dentro de una grilla, la sección puede achicarse y la tabla se desplaza dentro de su marco
+ * en lugar de ensanchar la página en el celular.
+ */
 export function Seccion({ titulo, children, accion }: { titulo: string; children: ReactNode; accion?: ReactNode }) {
   return (
-    <section>
+    <section className="min-w-0">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <h2 className="text-subtitulo font-extrabold text-grafito">{titulo}</h2>
         {accion}
