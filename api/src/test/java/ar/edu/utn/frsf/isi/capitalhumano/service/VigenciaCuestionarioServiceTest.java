@@ -41,7 +41,7 @@ class VigenciaCuestionarioServiceTest {
         // La configuración la da EvaluacionCuestionarioService: se usa la clase real con su DAO mockeado
         // (los demás DAOs no intervienen en la verificación de vigencia).
         EvaluacionCuestionarioService evaluacion = new EvaluacionCuestionarioService(
-                null, null, null, null, cuestionarioDao, null, null, configuracionDao);
+                null, null, null, null, null, cuestionarioDao, null, null, configuracionDao);
         service = new VigenciaCuestionarioService(cuestionarioDao, evaluacion);
     }
 

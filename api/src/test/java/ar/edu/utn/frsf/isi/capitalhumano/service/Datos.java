@@ -5,10 +5,13 @@ import ar.edu.utn.frsf.isi.capitalhumano.model.Competencia;
 import ar.edu.utn.frsf.isi.capitalhumano.model.ConfiguracionCuestionario;
 import ar.edu.utn.frsf.isi.capitalhumano.model.Cuestionario;
 import ar.edu.utn.frsf.isi.capitalhumano.model.DetalleOpcionRespuesta;
+import ar.edu.utn.frsf.isi.capitalhumano.model.Evaluacion;
 import ar.edu.utn.frsf.isi.capitalhumano.model.Factor;
 import ar.edu.utn.frsf.isi.capitalhumano.model.OpcionRespuesta;
+import ar.edu.utn.frsf.isi.capitalhumano.model.PonderacionEvaluacion;
 import ar.edu.utn.frsf.isi.capitalhumano.model.Pregunta;
 import ar.edu.utn.frsf.isi.capitalhumano.model.PreguntaCuestionario;
+import ar.edu.utn.frsf.isi.capitalhumano.model.PreguntaEvaluacion;
 import ar.edu.utn.frsf.isi.capitalhumano.model.Puesto;
 import ar.edu.utn.frsf.isi.capitalhumano.model.PuestoCompetencia;
 import ar.edu.utn.frsf.isi.capitalhumano.model.RespuestaCuestionario;
@@ -108,25 +111,67 @@ public final class Datos {
         return pc;
     }
 
+    /** Evaluación del CU025 para el puesto, todavía sin preguntas ni cuestionarios. */
+    public static Evaluacion evaluacion(long id, Puesto puesto, int nroEvaluacion, LocalDateTime fechaCreacion) {
+        Evaluacion ev = new Evaluacion();
+        ev.setId(id);
+        ev.setPuesto(puesto);
+        ev.setNroEvaluacion(nroEvaluacion);
+        ev.setFechaCreacion(fechaCreacion);
+        return ev;
+    }
+
+    /**
+     * Cuestionario de una evaluación nueva del puesto (EVA-001). Con puesto null queda sin evaluación,
+     * para los casos que no la usan.
+     */
     public static Cuestionario cuestionario(long id, Candidato candidato, Puesto puesto, String estado) {
+        Evaluacion ev = puesto == null ? null : evaluacion(id, puesto, 1, LocalDateTime.of(2026, 11, 20, 9, 0, 0));
+        return cuestionarioDe(id, candidato, ev, estado);
+    }
+
+    /** Cuestionario de la evaluación indicada (se agrega a sus cuestionarios). */
+    public static Cuestionario cuestionarioDe(long id, Candidato candidato, Evaluacion evaluacion, String estado) {
         Cuestionario q = new Cuestionario();
         q.setId(id);
         q.setCandidato(candidato);
-        q.setPuesto(puesto);
         q.setEstado(estado);
         q.setClaveAcceso("A8K3M9P2");
-        q.setFechaCreacion(LocalDateTime.of(2026, 11, 20, 9, 0, 0));
+        q.setFechaCreacion(evaluacion == null ? LocalDateTime.of(2026, 11, 20, 9, 0, 0) : evaluacion.getFechaCreacion());
+        if (evaluacion != null) {
+            evaluacion.agregarCuestionario(q);
+        }
         return q;
     }
 
-    /** Agrega al cuestionario una pregunta sorteada, en el bloque indicado. */
+    /**
+     * Copia congelada de la pregunta (la que guarda la evaluación al generarse). Usa el id de la pregunta;
+     * si se indica la evaluación, la agrega a su modelo.
+     */
+    public static PreguntaEvaluacion copia(Pregunta pregunta, Evaluacion evaluacion) {
+        PreguntaEvaluacion pe = PreguntaEvaluacion.copiaDe(pregunta);
+        pe.setId(pregunta.getId());
+        long nro = 1;
+        for (PonderacionEvaluacion p : pe.getPonderaciones()) {
+            p.setId(pregunta.getId() * 100 + nro++);
+        }
+        if (evaluacion != null) {
+            evaluacion.agregarPregunta(pe);
+        }
+        return pe;
+    }
+
+    /** Agrega al cuestionario la pregunta (copiada en el modelo de su evaluación), en el bloque indicado. */
     public static PreguntaCuestionario item(long id, Cuestionario cuestionario, Pregunta pregunta, int nroBloque) {
+        return item(id, cuestionario, copia(pregunta, cuestionario.getEvaluacion()), nroBloque);
+    }
+
+    /** Agrega al cuestionario una pregunta del modelo congelado, en el bloque indicado. */
+    public static PreguntaCuestionario item(long id, Cuestionario cuestionario, PreguntaEvaluacion pregunta, int nroBloque) {
         PreguntaCuestionario pq = new PreguntaCuestionario();
         pq.setId(id);
         pq.setCuestionario(cuestionario);
-        pq.setPregunta(pregunta);
-        pq.setFactor(pregunta.getFactor());
-        pq.setCompetencia(pregunta.getFactor().getCompetencia());
+        pq.setPreguntaEvaluacion(pregunta);
         pq.setNroBloque(nroBloque);
         pq.setOrdenVisual(cuestionario.getPreguntas().size() + 1);
         cuestionario.getPreguntas().add(pq);

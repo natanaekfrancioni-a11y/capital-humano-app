@@ -20,10 +20,14 @@ public class EvaluacionCuestionarioService {
     private static final String CARACTERES_CLAVE = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final SecureRandom RANDOM = new SecureRandom();
 
+    /** CU026 observación (1): se sortean 2 preguntas por factor; un factor con menos no se puede evaluar. */
+    private static final int PREGUNTAS_POR_FACTOR = 2;
+
     private final CandidatoDao candidatoDao;
     private final PuestoDao puestoDao;
     private final FactorDao factorDao;
     private final PreguntaDao preguntaDao;
+    private final EvaluacionDao evaluacionDao;
     private final CuestionarioDao cuestionarioDao;
     private final PreguntaCuestionarioDao preguntaCuestionarioDao;
     private final RespuestaCuestionarioDao respuestaCuestionarioDao;
@@ -34,6 +38,7 @@ public class EvaluacionCuestionarioService {
             PuestoDao puestoDao,
             FactorDao factorDao,
             PreguntaDao preguntaDao,
+            EvaluacionDao evaluacionDao,
             CuestionarioDao cuestionarioDao,
             PreguntaCuestionarioDao preguntaCuestionarioDao,
             RespuestaCuestionarioDao respuestaCuestionarioDao,
@@ -43,6 +48,7 @@ public class EvaluacionCuestionarioService {
         this.puestoDao = puestoDao;
         this.factorDao = factorDao;
         this.preguntaDao = preguntaDao;
+        this.evaluacionDao = evaluacionDao;
         this.cuestionarioDao = cuestionarioDao;
         this.preguntaCuestionarioDao = preguntaCuestionarioDao;
         this.respuestaCuestionarioDao = respuestaCuestionarioDao;
@@ -133,9 +139,12 @@ public class EvaluacionCuestionarioService {
     }
 
     /**
-     * CU025 paso 13: crea un cuestionario en estado ACTIVO por candidato. Si se reciben las claves
-     * mostradas en el paso 11 se usan esas; si no, se generan. Todos los cuestionarios de la
-     * evaluación comparten la misma fecha de creación (así se identifica la evaluación en el CU028).
+     * CU025 paso 13 (Finalizar): genera la evaluación del puesto con un cuestionario en estado ACTIVO por
+     * candidato. Si se reciben las claves mostradas en el paso 11 se usan esas; si no, se generan.
+     *
+     * <p>Requerimiento especial del CU025: al generar la evaluación se congela el modelo (competencias,
+     * factores, preguntas y opciones de respuesta con sus ponderaciones). Todos los cuestionarios de la
+     * evaluación se arman después con ese modelo (CU026), aunque mientras tanto cambie el catálogo.
      */
     @Transactional
     public List<Cuestionario> generarEvaluaciones(List<Long> candidatoIds, Long puestoId, Map<Long, String> claves) {
@@ -145,22 +154,49 @@ public class EvaluacionCuestionarioService {
         validarCompetenciasEvaluables(puesto);
 
         LocalDateTime ahora = LocalDateTime.now();
-        List<Cuestionario> creados = new ArrayList<>();
+        Evaluacion evaluacion = new Evaluacion();
+        evaluacion.setPuesto(puesto);
+        evaluacion.setNroEvaluacion(siguienteNroEvaluacion(puesto));
+        evaluacion.setFechaCreacion(ahora);
+        congelarModelo(evaluacion, puesto);
+
         for (Long candId : new LinkedHashSet<>(candidatoIds)) {
             Candidato cand = candidatoDao.findById(candId)
                     .orElseThrow(() -> new BusinessException("Candidato no encontrado: " + candId));
             String claveRecibida = claves == null ? null : claves.get(candId);
             Cuestionario q = new Cuestionario();
             q.setCandidato(cand);
-            q.setPuesto(puesto);
             q.setClaveAcceso(esClaveValida(claveRecibida) ? claveRecibida.trim().toUpperCase() : generarClaveAlfanumerica(8));
             q.setEstado(EstadosCuestionario.ACTIVO.nombre());
             q.setBloqueActual(1);
             q.setCantidadAccesos(0);
             q.setFechaCreacion(ahora);
-            creados.add(cuestionarioDao.save(q));
+            evaluacion.agregarCuestionario(q);
         }
-        return creados;
+        // Se guardan juntos la evaluación, su modelo y sus cuestionarios.
+        return evaluacionDao.save(evaluacion).getCuestionarios();
+    }
+
+    private int siguienteNroEvaluacion(Puesto puesto) {
+        return evaluacionDao.findFirstByPuestoIdOrderByNroEvaluacionDesc(puesto.getId())
+                .map(ultima -> ultima.getNroEvaluacion() + 1)
+                .orElse(1);
+    }
+
+    /**
+     * Copia en la evaluación las preguntas que se van a poder sortear: por cada competencia del puesto,
+     * los factores activos con al menos 2 preguntas activas, y de cada factor todas sus preguntas activas
+     * con su texto y la ponderación de cada opción de respuesta.
+     */
+    private void congelarModelo(Evaluacion evaluacion, Puesto puesto) {
+        for (PuestoCompetencia pc : puesto.getCompetencias()) {
+            for (Factor factor : factorDao.findByCompetenciaIdAndActivoTrueOrderByNroOrdenAsc(pc.getCompetencia().getId())) {
+                List<Pregunta> preguntas = preguntaDao.findByFactorIdAndActivaTrueOrderByIdAsc(factor.getId());
+                if (preguntas.size() >= PREGUNTAS_POR_FACTOR) {
+                    preguntas.forEach(p -> evaluacion.agregarPregunta(PreguntaEvaluacion.copiaDe(p)));
+                }
+            }
+        }
     }
 
     private void validarSeleccion(List<Long> candidatoIds, Long puestoId) {
@@ -199,7 +235,7 @@ public class EvaluacionCuestionarioService {
 
     private boolean esCompetenciaEvaluable(Long competenciaId) {
         return factorDao.findByCompetenciaIdAndActivoTrueOrderByNroOrdenAsc(competenciaId).stream()
-                .anyMatch(f -> preguntaDao.findByFactorIdAndActivaTrueOrderByIdAsc(f.getId()).size() >= 2);
+                .anyMatch(f -> preguntaDao.findByFactorIdAndActivaTrueOrderByIdAsc(f.getId()).size() >= PREGUNTAS_POR_FACTOR);
     }
 
     private Puesto buscarPuestoActivo(Long puestoId) {
@@ -229,40 +265,46 @@ public class EvaluacionCuestionarioService {
         EstadoCuestionario estado = EstadosCuestionario.de(q);
 
         if (estado.requiereSortearPreguntas()) {
-            List<Pregunta> seleccionadas = new ArrayList<>();
-            for (PuestoCompetencia pc : q.getPuesto().getCompetencias()) {
-                List<Factor> factores = factorDao.findByCompetenciaIdAndActivoTrueOrderByNroOrdenAsc(pc.getCompetencia().getId());
-                for (Factor f : factores) {
-                    List<Pregunta> disponibles = new ArrayList<>(preguntaDao.findByFactorIdAndActivaTrueOrderByIdAsc(f.getId()));
-                    if (disponibles.size() >= 2) {
-                        Collections.shuffle(disponibles, RANDOM);
-                        seleccionadas.add(disponibles.get(0));
-                        seleccionadas.add(disponibles.get(1));
-                    }
-                }
-            }
-            Collections.shuffle(seleccionadas, RANDOM);
-
-            int tamBloque = Math.max(1, cfg.getPreguntasPorBloque());
-            List<PreguntaCuestionario> items = new ArrayList<>();
-            for (int i = 0; i < seleccionadas.size(); i++) {
-                Pregunta p = seleccionadas.get(i);
-                PreguntaCuestionario pq = new PreguntaCuestionario();
-                pq.setCuestionario(q);
-                pq.setPregunta(p);
-                pq.setFactor(p.getFactor());
-                pq.setCompetencia(p.getFactor().getCompetencia());
-                pq.setOrdenVisual(i + 1);
-                pq.setNroBloque((i / tamBloque) + 1);
-                pq.setRespondida(false);
-                items.add(pq);
-            }
             q.getPreguntas().clear();
-            q.getPreguntas().addAll(items);
+            q.getPreguntas().addAll(sortearPreguntas(q, Math.max(1, cfg.getPreguntasPorBloque())));
         }
 
         estado.registrarIngreso(q, LocalDateTime.now());
         return cuestionarioDao.save(q);
+    }
+
+    /**
+     * CU026 paso 3 y observación (1): por cada factor del modelo congelado de la evaluación se toman
+     * 2 preguntas al azar; después se mezclan las de todos los factores y competencias y se agrupan en
+     * bloques del tamaño configurado. Las preguntas salen de la evaluación, no del catálogo actual.
+     */
+    private List<PreguntaCuestionario> sortearPreguntas(Cuestionario q, int tamBloque) {
+        Map<Long, List<PreguntaEvaluacion>> porFactor = new LinkedHashMap<>();
+        for (PreguntaEvaluacion pe : q.getEvaluacion().getPreguntas()) {
+            porFactor.computeIfAbsent(pe.getFactor().getId(), k -> new ArrayList<>()).add(pe);
+        }
+
+        List<PreguntaEvaluacion> seleccionadas = new ArrayList<>();
+        for (List<PreguntaEvaluacion> delFactor : porFactor.values()) {
+            if (delFactor.size() >= PREGUNTAS_POR_FACTOR) {
+                List<PreguntaEvaluacion> mezcladas = new ArrayList<>(delFactor);
+                Collections.shuffle(mezcladas, RANDOM);
+                seleccionadas.addAll(mezcladas.subList(0, PREGUNTAS_POR_FACTOR));
+            }
+        }
+        Collections.shuffle(seleccionadas, RANDOM);
+
+        List<PreguntaCuestionario> items = new ArrayList<>();
+        for (int i = 0; i < seleccionadas.size(); i++) {
+            PreguntaCuestionario pq = new PreguntaCuestionario();
+            pq.setCuestionario(q);
+            pq.setPreguntaEvaluacion(seleccionadas.get(i));
+            pq.setOrdenVisual(i + 1);
+            pq.setNroBloque((i / tamBloque) + 1);
+            pq.setRespondida(false);
+            items.add(pq);
+        }
+        return items;
     }
 
     public record RespuestaItemInput(Long preguntaCuestionarioId, Long detalleOpcionRespuestaId) {}
@@ -298,19 +340,15 @@ public class EvaluacionCuestionarioService {
 
         for (PreguntaCuestionario pq : preguntasBloque) {
             Long detId = seleccionMap.get(pq.getId());
-            DetalleOpcionRespuesta det = pq.getPregunta().getOpcionRespuesta().getDetalles().stream()
-                    .filter(d -> d.getId().equals(detId))
-                    .findFirst()
+            // La opción y su ponderación salen del modelo congelado de la evaluación (CU025, req. especial).
+            PonderacionEvaluacion elegida = pq.getPreguntaEvaluacion().buscarOpcion(detId)
                     .orElseThrow(() -> new BusinessException("Opcion de respuesta invalida para la pregunta " + pq.getId()));
-
-            BigDecimal pond = pq.getPregunta().getPonderacionesPorDetalle()
-                    .getOrDefault(detId, BigDecimal.ZERO);
 
             RespuestaCuestionario resp = respuestaCuestionarioDao.findByPreguntaCuestionarioId(pq.getId())
                     .orElseGet(RespuestaCuestionario::new);
             resp.setPreguntaCuestionario(pq);
-            resp.setDetalleOpcionRespuesta(det);
-            resp.setPonderacionObtenida(pond);
+            resp.setDetalleOpcionRespuesta(elegida.getDetalleOpcionRespuesta());
+            resp.setPonderacionObtenida(elegida.getPonderacion());
             resp.setRespondidaEn(LocalDateTime.now());
             respuestaCuestionarioDao.save(resp);
 

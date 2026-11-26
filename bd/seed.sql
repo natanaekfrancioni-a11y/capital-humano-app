@@ -211,23 +211,49 @@ JOIN puesto p ON p.codigo = v.pue_codigo
 JOIN competencia c ON c.codigo = v.comp_codigo;
 
 -- ----------------------------------------------------------------------------
--- Cuestionarios de ejemplo para el puesto PUE-PM-01:
+-- Evaluación EVA-001 del puesto PUE-PM-01, generada hace 2 días (CU025).
+-- Al generarla se congela el modelo: se copian las preguntas activas de los
+-- factores (con al menos 2 preguntas) de cada competencia del puesto, con la
+-- ponderación de cada opción. Los cuestionarios se arman con esa copia.
+-- ----------------------------------------------------------------------------
+INSERT INTO evaluacion (puesto_id, nro_evaluacion, fecha_creacion)
+SELECT id, 1, CURRENT_TIMESTAMP - INTERVAL '2 days'
+FROM puesto
+WHERE codigo = 'PUE-PM-01';
+
+INSERT INTO pregunta_evaluacion (evaluacion_id, factor_id, nombre, enunciado)
+SELECT e.id, f.id, p.nombre, p.enunciado
+FROM evaluacion e
+JOIN puesto_competencia pc ON pc.puesto_id = e.puesto_id
+JOIN factor f ON f.competencia_id = pc.competencia_id AND f.activo
+JOIN pregunta p ON p.factor_id = f.id AND p.activa
+WHERE (SELECT COUNT(*) FROM pregunta p2 WHERE p2.factor_id = f.id AND p2.activa) >= 2
+ORDER BY f.competencia_id, f.nro_orden, p.id;
+
+INSERT INTO ponderacion_evaluacion (pregunta_evaluacion_id, detalle_opcion_respuesta_id, ponderacion)
+SELECT pe.id, pop.detalle_opcion_respuesta_id, pop.ponderacion
+FROM pregunta_evaluacion pe
+JOIN pregunta p ON p.factor_id = pe.factor_id AND p.nombre = pe.nombre
+JOIN ponderacion_opcion_pregunta pop ON pop.pregunta_id = p.id;
+
+-- ----------------------------------------------------------------------------
+-- Cuestionarios de la evaluación EVA-001:
 --   CAND-001 PEREZ:     activo, para completarlo como candidato (clave A8K3M9P2).
 --   CAND-002 SOSA:      completo. GP 5,75 / LE 3,75 -> 4,75 (alcanza los mínimos).
 --   CAND-003 GUTIERREZ: completo. GP 5,25 / LE 1,25 -> 3,25 (no alcanza el de LEALTAD).
 -- ----------------------------------------------------------------------------
 INSERT INTO cuestionario (
-    candidato_id, puesto_id, clave_acceso, estado, bloque_actual, cantidad_accesos,
+    candidato_id, evaluacion_id, clave_acceso, estado, bloque_actual, cantidad_accesos,
     fecha_creacion, fecha_inicio, fecha_ultimo_acceso, fecha_fin, puntaje_total
 )
 SELECT
     cand.id,
-    pue.id,
+    e.id,
     v.clave,
     v.estado,
     v.bloque_actual,
     v.accesos,
-    CURRENT_TIMESTAMP - INTERVAL '2 days',
+    e.fecha_creacion,
     v.f_inicio,
     v.f_ultimo,
     v.f_fin,
@@ -239,13 +265,15 @@ FROM (
         ('CAND-003', 'PUE-PM-01', 'B6N2Q8L5', 'COMPLETO', 4, 1, CURRENT_TIMESTAMP - INTERVAL '1 day', CURRENT_TIMESTAMP - INTERVAL '22 hours', CURRENT_TIMESTAMP - INTERVAL '22 hours', 3.25::NUMERIC)
 ) AS v(nro_cand, cod_pue, clave, estado, bloque_actual, accesos, f_inicio, f_ultimo, f_fin, puntaje)
 JOIN candidato cand ON cand.nro_candidato = v.nro_cand
-JOIN puesto pue ON pue.codigo = v.cod_pue;
+JOIN puesto pue ON pue.codigo = v.cod_pue
+JOIN evaluacion e ON e.puesto_id = pue.id AND e.nro_evaluacion = 1;
 
--- Preguntas de los cuestionarios completos: 2 por factor, en bloques de 2 (preguntas_por_bloque = 2).
+-- Preguntas de los cuestionarios completos (tomadas del modelo de la evaluación): 2 por factor,
+-- en bloques de 2 (preguntas_por_bloque = 2).
 INSERT INTO pregunta_cuestionario (
-    cuestionario_id, pregunta_id, factor_id, competencia_id, nro_bloque, orden_visual, respondida
+    cuestionario_id, pregunta_evaluacion_id, nro_bloque, orden_visual, respondida
 )
-SELECT q.id, p.id, f.id, f.competencia_id, v.nro_bloque, v.orden_visual, TRUE
+SELECT q.id, pe.id, v.nro_bloque, v.orden_visual, TRUE
 FROM (
     VALUES
         ('CAND-002', 'PREG-GP-01-01', 1, 1), ('CAND-002', 'PREG-LE-02-01', 1, 2),
@@ -260,13 +288,14 @@ FROM (
 JOIN candidato cand ON cand.nro_candidato = v.nro_cand
 JOIN cuestionario q ON q.candidato_id = cand.id AND q.estado = 'COMPLETO'
 JOIN pregunta p ON p.codigo = v.preg_codigo
-JOIN factor f ON f.id = p.factor_id;
+JOIN pregunta_evaluacion pe ON pe.evaluacion_id = q.evaluacion_id AND pe.factor_id = p.factor_id AND pe.nombre = p.nombre;
 
--- Respuestas elegidas, por orden de visualización de la opción.
+-- Respuestas elegidas, por orden de visualización de la opción. La ponderación obtenida es la del
+-- modelo de la evaluación.
 INSERT INTO respuesta_cuestionario (
     pregunta_cuestionario_id, detalle_opcion_respuesta_id, ponderacion_obtenida, respondida_en
 )
-SELECT pq.id, d.id, pop.ponderacion, q.fecha_fin
+SELECT pq.id, d.id, pv.ponderacion, q.fecha_fin
 FROM (
     VALUES
         -- SOSA
@@ -291,6 +320,7 @@ FROM (
 JOIN candidato cand ON cand.nro_candidato = v.nro_cand
 JOIN cuestionario q ON q.candidato_id = cand.id AND q.estado = 'COMPLETO'
 JOIN pregunta p ON p.codigo = v.preg_codigo
-JOIN pregunta_cuestionario pq ON pq.cuestionario_id = q.id AND pq.pregunta_id = p.id
+JOIN pregunta_evaluacion pe ON pe.evaluacion_id = q.evaluacion_id AND pe.factor_id = p.factor_id AND pe.nombre = p.nombre
+JOIN pregunta_cuestionario pq ON pq.cuestionario_id = q.id AND pq.pregunta_evaluacion_id = pe.id
 JOIN detalle_opcion_respuesta d ON d.opcion_respuesta_id = p.opcion_respuesta_id AND d.nro_orden = v.orden
-JOIN ponderacion_opcion_pregunta pop ON pop.pregunta_id = p.id AND pop.detalle_opcion_respuesta_id = d.id;
+JOIN ponderacion_evaluacion pv ON pv.pregunta_evaluacion_id = pe.id AND pv.detalle_opcion_respuesta_id = d.id;

@@ -8,6 +8,4 @@ import java.util.Optional;
 public interface CuestionarioDao extends JpaRepository<Cuestionario, Long> {
     List<Cuestionario> findByCandidatoIdAndEstadoIn(Long candidatoId, List<String> estados);
     Optional<Cuestionario> findFirstByCandidatoIdAndEstadoInOrderByIdDesc(Long candidatoId, List<String> estados);
-    List<Cuestionario> findByPuestoIdOrderByIdAsc(Long puestoId);
-    boolean existsByPuestoId(Long puestoId);
 }

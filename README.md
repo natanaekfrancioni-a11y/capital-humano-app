@@ -69,7 +69,7 @@ La aplicación queda en `http://localhost:3000`. Si la API corre en otra direcci
 |---|---|
 | Ingresar como consultor | Usuario `CONSULTOR1` (o `NFRANCIONI`), cualquier contraseña: la validación contra el LDAP está simulada |
 | Realizar un cuestionario | DNI `35111222`, clave `A8K3M9P2` (cuestionario activo de PEREZ para PROJECT MANAGER TIC) |
-| Orden de mérito | Puesto `PUE-PM-01`: SOSA cumple los mínimos (4,75), GUTIERREZ no alcanza el de LEALTAD (3,25), PEREZ está activo |
+| Orden de mérito | Puesto `PUE-PM-01`, evaluación `EVA-001`: SOSA cumple los mínimos (4,75), GUTIERREZ no alcanza el de LEALTAD (3,25), PEREZ está activo |
 
 Las preguntas son las del enunciado más algunas de Arquitectura de Software: 3 por factor, así cada cuestionario sortea 2 distintas. Cada pregunta tiene una opción de respuesta que le corresponde: verdadero o falso, una escala de valoración, una de frecuencia o frases propias de la pregunta, como en el ejemplo de LEALTAD del enunciado.
 
@@ -125,9 +125,9 @@ Los errores de negocio responden `400` con `{ "error": "...", "detalles": ["..."
 | CU026 | `POST /api/evaluaciones/cuestionarios/{id}/bloques/{nroBloque}/responder` `{ respuestas }` |
 | CU028 | `GET /api/reportes/puestos?codigo=&nombre=&empresa=` |
 | CU028 | `GET /api/reportes/puestos/{puestoId}/evaluaciones` |
-| CU028 | `GET /api/reportes/orden-merito?puestoId=&evaluacion=TODAS&emitidoPor=` |
+| CU028 | `GET /api/reportes/orden-merito?puestoId=&evaluacion=TODAS&emitidoPor=` (`evaluacion` acepta también uno o más códigos: `EVA-001,EVA-002`) |
 
-Una **evaluación** es el grupo de cuestionarios que se generan juntos en el CU025 para un puesto: comparten la fecha de creación y se numeran `EVA-001`, `EVA-002`, ... por puesto.
+Una **evaluación** es la que genera el CU025 al presionar Finalizar (tabla `evaluacion`): agrupa los cuestionarios creados en ese momento y se numera dentro del puesto (`EVA-001`, `EVA-002`, ...). Al generarse guarda una copia de las preguntas que se pueden sortear, con su texto y la ponderación de cada opción (tablas `pregunta_evaluacion` y `ponderacion_evaluacion`). Todos sus cuestionarios se arman con ese modelo aunque después se modifique el catálogo de preguntas, como pide el requerimiento especial del CU025.
 
 ## Diseño del Frontend
 

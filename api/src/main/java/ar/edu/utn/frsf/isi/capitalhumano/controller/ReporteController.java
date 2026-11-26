@@ -40,11 +40,14 @@ public class ReporteController {
         return ResponseEntity.ok(reporteService.listarEvaluaciones(puestoId));
     }
 
-    /** CU028 paso 7: evaluacion = TODAS o el código de una evaluación (EVA-001). */
+    /**
+     * CU028 paso 7: evaluacion = TODAS o el código de una o más evaluaciones
+     * (?evaluacion=EVA-001 o ?evaluacion=EVA-001,EVA-003).
+     */
     @GetMapping("/orden-merito")
     public ResponseEntity<ReporteOrdenMeritoDTO> ordenDeMerito(
             @RequestParam Long puestoId,
-            @RequestParam(defaultValue = ReporteService.TODAS) String evaluacion,
+            @RequestParam(defaultValue = ReporteService.TODAS) List<String> evaluacion,
             @RequestParam(required = false) String emitidoPor) {
         return ResponseEntity.ok(reporteService.emitirOrdenDeMerito(puestoId, evaluacion, emitidoPor));
     }

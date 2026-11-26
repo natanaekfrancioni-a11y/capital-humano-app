@@ -1,11 +1,13 @@
 package ar.edu.utn.frsf.isi.capitalhumano.service;
 
-import ar.edu.utn.frsf.isi.capitalhumano.dao.CuestionarioDao;
+import ar.edu.utn.frsf.isi.capitalhumano.dao.EvaluacionDao;
 import ar.edu.utn.frsf.isi.capitalhumano.dao.PuestoDao;
 import ar.edu.utn.frsf.isi.capitalhumano.dao.RespuestaCuestionarioDao;
 import ar.edu.utn.frsf.isi.capitalhumano.exception.BusinessException;
 import ar.edu.utn.frsf.isi.capitalhumano.model.Candidato;
+import ar.edu.utn.frsf.isi.capitalhumano.model.Competencia;
 import ar.edu.utn.frsf.isi.capitalhumano.model.Cuestionario;
+import ar.edu.utn.frsf.isi.capitalhumano.model.Evaluacion;
 import ar.edu.utn.frsf.isi.capitalhumano.model.PreguntaCuestionario;
 import ar.edu.utn.frsf.isi.capitalhumano.model.Puesto;
 import ar.edu.utn.frsf.isi.capitalhumano.model.PuestoCompetencia;
@@ -16,22 +18,21 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.TreeMap;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * GestorReportes: CU028 (Emitir orden de mérito).
  *
- * Una "evaluación" es el conjunto de cuestionarios generados juntos para un puesto en el CU025:
- * se identifican por su fecha de creación (al segundo) y se numeran EVA-001, EVA-002, ...
- * en orden cronológico dentro de cada puesto.
+ * Una evaluación es la que generó el CU025 para el puesto ({@link Evaluacion}): agrupa los cuestionarios
+ * que se crearon juntos y tiene su número dentro del puesto (EVA-001, EVA-002, ...).
  */
 @Service
 @Transactional(readOnly = true)
@@ -43,16 +44,16 @@ public class ReporteService {
             List.of("EN_PROCESO", "ACTIVO", "INCOMPLETO", "SIN_CONTESTAR");
 
     private final PuestoDao puestoDao;
-    private final CuestionarioDao cuestionarioDao;
+    private final EvaluacionDao evaluacionDao;
     private final RespuestaCuestionarioDao respuestaDao;
 
     public ReporteService(
             PuestoDao puestoDao,
-            CuestionarioDao cuestionarioDao,
+            EvaluacionDao evaluacionDao,
             RespuestaCuestionarioDao respuestaDao
     ) {
         this.puestoDao = puestoDao;
-        this.cuestionarioDao = cuestionarioDao;
+        this.evaluacionDao = evaluacionDao;
         this.respuestaDao = respuestaDao;
     }
 
@@ -82,6 +83,9 @@ public class ReporteService {
             List<FilaOrdenMeritoDTO> ordenMerito, List<FilaOrdenMeritoDTO> noAlcanzanMinimo,
             List<FilaOrdenMeritoDTO> restantes) {}
 
+    /** Evaluaciones elegidas en el paso 6 y cómo se muestran en el reporte ("TODAS" o sus códigos). */
+    private record Seleccion(List<Evaluacion> evaluaciones, String descripcion) {}
+
     // ------------------------------------------------------------------ CU028
 
     /** CU028 pasos 2 a 4: puestos que coinciden con los criterios ("contiene"), con sus conteos. */
@@ -94,7 +98,7 @@ public class ReporteService {
                 .filter(p -> n.isEmpty() || p.getNombre().toUpperCase().contains(n))
                 .filter(p -> e.isEmpty() || p.getEmpresa().toUpperCase().contains(e))
                 .map(p -> {
-                    List<Cuestionario> cuestionarios = cuestionarioDao.findByPuestoIdOrderByIdAsc(p.getId());
+                    List<Cuestionario> cuestionarios = cuestionariosDe(evaluacionDao.findByPuestoIdOrderByNroEvaluacionAsc(p.getId()));
                     return new PuestoResumenDTO(
                             p.getId(), p.getCodigo(), p.getNombre(), p.getEmpresa(),
                             contarCandidatos(cuestionarios), contarCompletos(cuestionarios));
@@ -105,66 +109,58 @@ public class ReporteService {
     /** CU028 paso 6: evaluaciones generadas para el puesto (6.A si no tiene ninguna). */
     public EvaluacionesPuestoDTO listarEvaluaciones(Long puestoId) {
         Puesto puesto = buscarPuesto(puestoId);
-        List<Cuestionario> todos = cuestionarioDao.findByPuestoIdOrderByIdAsc(puestoId);
-        if (todos.isEmpty()) {
-            throw new BusinessException("El puesto " + puesto.getNombre()
-                    + " no posee evaluaciones registradas. No es posible emitir el orden de mérito.");
-        }
+        List<Evaluacion> evaluaciones = evaluacionesDelPuesto(puesto);
 
-        List<EvaluacionDTO> evaluaciones = new ArrayList<>();
-        agruparPorEvaluacion(todos).forEach((codigo, grupo) -> evaluaciones.add(new EvaluacionDTO(
-                codigo,
-                grupo.get(0).getFechaCreacion(),
-                contarCandidatos(grupo),
-                contarCompletos(grupo))));
+        List<EvaluacionDTO> dtos = evaluaciones.stream()
+                .map(ev -> new EvaluacionDTO(
+                        ev.getCodigo(),
+                        ev.getFechaCreacion(),
+                        contarCandidatos(ev.getCuestionarios()),
+                        contarCompletos(ev.getCuestionarios())))
+                .toList();
+        List<Cuestionario> todos = cuestionariosDe(evaluaciones);
 
         return new EvaluacionesPuestoDTO(
                 puesto.getId(), puesto.getCodigo(), puesto.getNombre(),
-                contarCandidatos(todos), contarCompletos(todos), evaluaciones);
+                contarCandidatos(todos), contarCompletos(todos), dtos);
     }
 
     /**
-     * CU028 paso 7. El orden de mérito lo forman los candidatos con cuestionario completo que
-     * alcanzaron la ponderación mínima de CADA competencia del puesto, ordenados por puntaje.
-     * Se muestran aparte los completos que no alcanzaron los mínimos y el resto agrupado por estado.
+     * CU028 paso 7 con una evaluación (EVA-001), varias separadas por coma (EVA-001,EVA-003) o TODAS.
      */
     public ReporteOrdenMeritoDTO emitirOrdenDeMerito(Long puestoId, String evaluacion, String emitidoPor) {
-        Puesto puesto = buscarPuesto(puestoId);
-        List<Cuestionario> todos = cuestionarioDao.findByPuestoIdOrderByIdAsc(puestoId);
-        if (todos.isEmpty()) {
-            throw new BusinessException("El puesto " + puesto.getNombre()
-                    + " no posee evaluaciones registradas. No es posible emitir el orden de mérito.");
-        }
+        return emitirOrdenDeMerito(puestoId, evaluacion == null ? List.of() : List.of(evaluacion), emitidoPor);
+    }
 
-        String evaluacionElegida = evaluacion == null || evaluacion.isBlank()
-                ? TODAS
-                : evaluacion.trim().toUpperCase();
-        List<Cuestionario> seleccionados;
-        if (TODAS.equals(evaluacionElegida)) {
-            seleccionados = todos;
-        } else {
-            seleccionados = agruparPorEvaluacion(todos).get(evaluacionElegida);
-            if (seleccionados == null) {
-                throw new BusinessException("La evaluación " + evaluacionElegida + " no existe para el puesto seleccionado");
-            }
-        }
+    /**
+     * CU028 pasos 6 y 7. El orden de mérito lo forman los candidatos con cuestionario completo que
+     * alcanzaron la ponderación mínima de CADA competencia evaluada, ordenados por puntaje. Se muestran
+     * aparte los completos que no alcanzaron los mínimos y el resto agrupado por estado.
+     *
+     * @param evaluaciones códigos de las evaluaciones elegidas; vacío o "TODAS" toma todas las del puesto.
+     */
+    public ReporteOrdenMeritoDTO emitirOrdenDeMerito(Long puestoId, List<String> evaluaciones, String emitidoPor) {
+        Puesto puesto = buscarPuesto(puestoId);
+        Seleccion seleccion = seleccionarEvaluaciones(evaluacionesDelPuesto(puesto), evaluaciones);
 
         List<FilaOrdenMeritoDTO> cumplen = new ArrayList<>();
         List<FilaOrdenMeritoDTO> noCumplen = new ArrayList<>();
         List<FilaOrdenMeritoDTO> restantes = new ArrayList<>();
 
-        for (Cuestionario q : seleccionados) {
-            if ("COMPLETO".equals(q.getEstado())) {
-                Map<Long, BigDecimal> porCompetencia = puntajesPorCompetencia(q);
-                BigDecimal puntaje = q.getPuntajeTotal() != null ? q.getPuntajeTotal() : promedio(porCompetencia);
-                FilaOrdenMeritoDTO fila = fila(null, q, puntaje);
-                if (alcanzaMinimos(puesto, porCompetencia)) {
-                    cumplen.add(fila);
+        for (Evaluacion ev : seleccion.evaluaciones()) {
+            for (Cuestionario q : ev.getCuestionarios()) {
+                if ("COMPLETO".equals(q.getEstado())) {
+                    Map<Long, BigDecimal> porCompetencia = puntajesPorCompetencia(q);
+                    BigDecimal puntaje = q.getPuntajeTotal() != null ? q.getPuntajeTotal() : promedio(porCompetencia);
+                    FilaOrdenMeritoDTO fila = fila(null, q, puntaje);
+                    if (alcanzaMinimos(puesto, ev, porCompetencia)) {
+                        cumplen.add(fila);
+                    } else {
+                        noCumplen.add(fila);
+                    }
                 } else {
-                    noCumplen.add(fila);
+                    restantes.add(fila(null, q, null));
                 }
-            } else {
-                restantes.add(fila(null, q, null));
             }
         }
 
@@ -194,7 +190,7 @@ public class ReporteService {
                 .toList();
 
         return new ReporteOrdenMeritoDTO(
-                puesto.getCodigo(), puesto.getNombre(), puesto.getEmpresa(), evaluacionElegida,
+                puesto.getCodigo(), puesto.getNombre(), puesto.getEmpresa(), seleccion.descripcion(),
                 LocalDateTime.now(), emitidoPor == null || emitidoPor.isBlank() ? "-" : emitidoPor.trim(),
                 competencias, ordenMerito, noCumplen, restantes);
     }
@@ -229,10 +225,18 @@ public class ReporteService {
         return resultado;
     }
 
-    private boolean alcanzaMinimos(Puesto puesto, Map<Long, BigDecimal> porCompetencia) {
-        for (PuestoCompetencia pc : puesto.getCompetencias()) {
-            BigDecimal obtenido = porCompetencia.getOrDefault(pc.getCompetencia().getId(), BigDecimal.ZERO);
-            if (obtenido.compareTo(pc.getPonderacionMinima()) < 0) {
+    /**
+     * Se controlan las competencias que evaluó la evaluación del cuestionario (su modelo congelado),
+     * contra la ponderación mínima que el puesto exige en cada una.
+     */
+    private boolean alcanzaMinimos(Puesto puesto, Evaluacion evaluacion, Map<Long, BigDecimal> porCompetencia) {
+        for (Competencia competencia : evaluacion.getCompetenciasEvaluadas()) {
+            Optional<BigDecimal> minimo = puesto.getCompetencias().stream()
+                    .filter(pc -> pc.getCompetencia().getId().equals(competencia.getId()))
+                    .map(PuestoCompetencia::getPonderacionMinima)
+                    .findFirst();
+            BigDecimal obtenido = porCompetencia.getOrDefault(competencia.getId(), BigDecimal.ZERO);
+            if (minimo.isPresent() && obtenido.compareTo(minimo.get()) < 0) {
                 return false;
             }
         }
@@ -249,19 +253,39 @@ public class ReporteService {
 
     // ------------------------------------------------------------------ auxiliares
 
-    /** Agrupa los cuestionarios por evaluación (fecha de creación al segundo), en orden cronológico. */
-    private Map<String, List<Cuestionario>> agruparPorEvaluacion(List<Cuestionario> cuestionarios) {
-        TreeMap<LocalDateTime, List<Cuestionario>> porFecha = new TreeMap<>();
-        for (Cuestionario q : cuestionarios) {
-            porFecha.computeIfAbsent(q.getFechaCreacion().truncatedTo(ChronoUnit.SECONDS), k -> new ArrayList<>())
-                    .add(q);
+    /** Evaluaciones del puesto en orden. 6.A: si no tiene ninguna no se puede emitir el orden de mérito. */
+    private List<Evaluacion> evaluacionesDelPuesto(Puesto puesto) {
+        List<Evaluacion> evaluaciones = evaluacionDao.findByPuestoIdOrderByNroEvaluacionAsc(puesto.getId());
+        if (evaluaciones.isEmpty()) {
+            throw new BusinessException("El puesto " + puesto.getNombre()
+                    + " no posee evaluaciones registradas. No es posible emitir el orden de mérito.");
         }
-        Map<String, List<Cuestionario>> resultado = new LinkedHashMap<>();
-        int nro = 1;
-        for (List<Cuestionario> grupo : porFecha.values()) {
-            resultado.put(String.format("EVA-%03d", nro++), grupo);
+        return evaluaciones;
+    }
+
+    /** CU028 paso 6: "evaluación/es" por código, o la opción TODAS (también si no se elige ninguna). */
+    private Seleccion seleccionarEvaluaciones(List<Evaluacion> delPuesto, List<String> pedidas) {
+        List<String> codigos = pedidas == null ? List.of() : pedidas.stream()
+                .filter(Objects::nonNull)
+                .flatMap(s -> Arrays.stream(s.split(",")))
+                .map(this::normalizar)
+                .filter(s -> !s.isEmpty())
+                .distinct()
+                .toList();
+        if (codigos.isEmpty() || codigos.contains(TODAS)) {
+            return new Seleccion(delPuesto, TODAS);
         }
-        return resultado;
+        for (String codigo : codigos) {
+            if (delPuesto.stream().noneMatch(ev -> codigo.equals(ev.getCodigo()))) {
+                throw new BusinessException("La evaluación " + codigo + " no existe para el puesto seleccionado");
+            }
+        }
+        List<Evaluacion> elegidas = delPuesto.stream().filter(ev -> codigos.contains(ev.getCodigo())).toList();
+        return new Seleccion(elegidas, elegidas.stream().map(Evaluacion::getCodigo).collect(Collectors.joining(", ")));
+    }
+
+    private List<Cuestionario> cuestionariosDe(List<Evaluacion> evaluaciones) {
+        return evaluaciones.stream().flatMap(ev -> ev.getCuestionarios().stream()).toList();
     }
 
     private FilaOrdenMeritoDTO fila(Integer posicion, Cuestionario q, BigDecimal puntaje) {

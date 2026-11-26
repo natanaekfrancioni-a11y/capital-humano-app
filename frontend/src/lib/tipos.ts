@@ -92,19 +92,37 @@ export interface Puesto {
   competencias: PuestoCompetencia[];
 }
 
+/**
+ * CU026: pregunta del cuestionario tal como la ve el candidato. Es la copia que guardó la evaluación al
+ * generarse (modelo congelado del CU025): texto y opciones de ese momento, sin las ponderaciones.
+ */
+export interface PreguntaDelCuestionario {
+  id: number;
+  nombre: string;
+  enunciado: string;
+  opcionRespuesta: { detalles: DetalleOpcion[] };
+}
+
 export interface PreguntaCuestionario {
   id: number;
-  pregunta: Pregunta;
-  factor: Factor;
-  competencia: Competencia;
+  pregunta: PreguntaDelCuestionario;
   nroBloque: number;
   ordenVisual: number;
   respondida: boolean;
 }
 
+/** CU025: evaluación a la que pertenece el cuestionario (EVA-001, EVA-002, ... dentro del puesto). */
+export interface EvaluacionDelCuestionario {
+  id: number;
+  nroEvaluacion: number;
+  codigo: string;
+  fechaCreacion: string;
+}
+
 export interface Cuestionario {
   id: number;
   candidato: Candidato;
+  evaluacion: EvaluacionDelCuestionario;
   puesto: Puesto;
   claveAcceso: string;
   estado: EstadoCuestionario;
