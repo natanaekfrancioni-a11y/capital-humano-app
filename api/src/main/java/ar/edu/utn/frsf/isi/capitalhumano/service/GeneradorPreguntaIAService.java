@@ -30,6 +30,7 @@ import org.springframework.stereotype.Service;
  *
  * Arma el pedido con la competencia, el factor, las preguntas que ya tiene el factor y las opciones
  * de respuesta disponibles; lo envía al servicio de IA y devuelve los datos para completar el alta.
+ * Es el contexto del patrón Strategy: usa el proveedor de IA a través de la interfaz {@link ProveedorIA}.
  * No guarda nada: el consultor revisa los datos y la pregunta se registra con el "Aceptar" de CU021,
  * que hace todas las validaciones de siempre (nombre y texto repetidos, ponderaciones que suman 10).
  */
@@ -63,7 +64,7 @@ public class GeneradorPreguntaIAService {
     private final FactorDao factorDao;
     private final PreguntaDao preguntaDao;
     private final OpcionRespuestaDao opcionRespuestaDao;
-    private final ClienteGemini clienteGemini;
+    private final ProveedorIA proveedorIA;
     private final ObjectMapper mapper;
 
     public GeneradorPreguntaIAService(
@@ -71,13 +72,13 @@ public class GeneradorPreguntaIAService {
             FactorDao factorDao,
             PreguntaDao preguntaDao,
             OpcionRespuestaDao opcionRespuestaDao,
-            ClienteGemini clienteGemini,
+            ProveedorIA proveedorIA,
             ObjectMapper mapper) {
         this.competenciaDao = competenciaDao;
         this.factorDao = factorDao;
         this.preguntaDao = preguntaDao;
         this.opcionRespuestaDao = opcionRespuestaDao;
-        this.clienteGemini = clienteGemini;
+        this.proveedorIA = proveedorIA;
         this.mapper = mapper;
     }
 
@@ -108,8 +109,8 @@ public class GeneradorPreguntaIAService {
         // Paso 3: se invoca el servicio externo de IA. 4.A: si falla, se informa con el mensaje del CU.
         String respuesta;
         try {
-            respuesta = clienteGemini.generarJson(armarPrompt(competencia, factor, existentes, opciones), armarEsquema(opciones));
-        } catch (ClienteGemini.ServicioIAException e) {
+            respuesta = proveedorIA.generarJson(armarPrompt(competencia, factor, existentes, opciones), armarEsquema(opciones));
+        } catch (ServicioIAException e) {
             throw new BusinessException(MENSAJE_ERROR_IA, List.of(e.getMessage()));
         }
         // Paso 4: datos que se cargan automáticamente en la pantalla de alta.

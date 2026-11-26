@@ -3,6 +3,8 @@ package ar.edu.utn.frsf.isi.capitalhumano.service;
 import ar.edu.utn.frsf.isi.capitalhumano.dao.*;
 import ar.edu.utn.frsf.isi.capitalhumano.exception.BusinessException;
 import ar.edu.utn.frsf.isi.capitalhumano.model.*;
+import ar.edu.utn.frsf.isi.capitalhumano.service.estado.EstadoCuestionario;
+import ar.edu.utn.frsf.isi.capitalhumano.service.estado.EstadosCuestionario;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,7 +61,8 @@ public class EvaluacionCuestionarioService {
                 .toList();
     }
 
-    private static final List<String> ESTADOS_VIGENTES = List.of("ACTIVO", "EN_PROCESO");
+    private static final List<String> ESTADOS_VIGENTES =
+            List.of(EstadosCuestionario.ACTIVO.nombre(), EstadosCuestionario.EN_PROCESO.nombre());
 
     /** CU025 paso 6: candidatos que ya poseen cuestionarios activos o en proceso (6.A). */
     public List<Candidato> validarCuestionariosActivos(List<Long> candidatoIds) {
@@ -151,7 +154,7 @@ public class EvaluacionCuestionarioService {
             q.setCandidato(cand);
             q.setPuesto(puesto);
             q.setClaveAcceso(esClaveValida(claveRecibida) ? claveRecibida.trim().toUpperCase() : generarClaveAlfanumerica(8));
-            q.setEstado("ACTIVO");
+            q.setEstado(EstadosCuestionario.ACTIVO.nombre());
             q.setBloqueActual(1);
             q.setCantidadAccesos(0);
             q.setFechaCreacion(ahora);
@@ -222,8 +225,10 @@ public class EvaluacionCuestionarioService {
                 .orElseThrow(() -> new BusinessException("Cuestionario no encontrado"));
 
         ConfiguracionCuestionario cfg = obtenerConfiguracion();
+        // Patrón State: el estado decide si hay que sortear las preguntas y cómo se registra el ingreso.
+        EstadoCuestionario estado = EstadosCuestionario.de(q);
 
-        if ("ACTIVO".equals(q.getEstado())) {
+        if (estado.requiereSortearPreguntas()) {
             List<Pregunta> seleccionadas = new ArrayList<>();
             for (PuestoCompetencia pc : q.getPuesto().getCompetencias()) {
                 List<Factor> factores = factorDao.findByCompetenciaIdAndActivoTrueOrderByNroOrdenAsc(pc.getCompetencia().getId());
@@ -254,13 +259,9 @@ public class EvaluacionCuestionarioService {
             }
             q.getPreguntas().clear();
             q.getPreguntas().addAll(items);
-            q.setEstado("EN_PROCESO");
-            q.setBloqueActual(1);
-            q.setFechaInicio(LocalDateTime.now());
         }
 
-        q.setCantidadAccesos(q.getCantidadAccesos() + 1);
-        q.setFechaUltimoAcceso(LocalDateTime.now());
+        estado.registrarIngreso(q, LocalDateTime.now());
         return cuestionarioDao.save(q);
     }
 
@@ -271,9 +272,8 @@ public class EvaluacionCuestionarioService {
         Cuestionario q = cuestionarioDao.findById(cuestionarioId)
                 .orElseThrow(() -> new BusinessException("Cuestionario no encontrado"));
 
-        if (!"EN_PROCESO".equals(q.getEstado())) {
-            throw new BusinessException("El cuestionario no se encuentra en proceso");
-        }
+        EstadoCuestionario estado = EstadosCuestionario.de(q);
+        estado.validarQueAdmiteRespuestas(q);
         if (!Objects.equals(nroBloque, q.getBloqueActual())) {
             throw new BusinessException("Solo puede responder el bloque activo actual (" + q.getBloqueActual() + ")");
         }
@@ -327,16 +327,12 @@ public class EvaluacionCuestionarioService {
             q.setBloqueActual(nroBloque + 1);
             q.setFechaUltimoAcceso(LocalDateTime.now());
         } else {
-            BigDecimal puntajeFinal = calcularPuntajeTotal(q);
-            q.setPuntajeTotal(puntajeFinal);
-            q.setEstado("COMPLETO");
-            q.setFechaFin(LocalDateTime.now());
-            q.setFechaCambioEstado(LocalDateTime.now());
+            estado.completar(q, calcularPuntajeTotal(q), LocalDateTime.now());
         }
         return cuestionarioDao.save(q);
     }
 
-public BigDecimal calcularPuntajeTotal(Cuestionario cuestionario) {
+    public BigDecimal calcularPuntajeTotal(Cuestionario cuestionario) {
         Map<Long, List<BigDecimal>> puntajesPorFactor = new HashMap<>();
         Map<Long, Long> factorACompetencia = new HashMap<>();
 

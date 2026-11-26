@@ -3,11 +3,16 @@ package ar.edu.utn.frsf.isi.capitalhumano.service;
 import ar.edu.utn.frsf.isi.capitalhumano.dao.*;
 import ar.edu.utn.frsf.isi.capitalhumano.exception.BusinessException;
 import ar.edu.utn.frsf.isi.capitalhumano.model.*;
+import ar.edu.utn.frsf.isi.capitalhumano.service.baja.BajaCompetencia;
+import ar.edu.utn.frsf.isi.capitalhumano.service.baja.BajaFactor;
+import ar.edu.utn.frsf.isi.capitalhumano.service.baja.BajaLogica;
+import ar.edu.utn.frsf.isi.capitalhumano.service.baja.BajaOpcionRespuesta;
+import ar.edu.utn.frsf.isi.capitalhumano.service.baja.BajaPregunta;
+import ar.edu.utn.frsf.isi.capitalhumano.service.baja.BajaPuesto;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
@@ -18,8 +23,14 @@ public class CatalogoService {
     private final OpcionRespuestaDao opcionRespuestaDao;
     private final PreguntaDao preguntaDao;
     private final PuestoDao puestoDao;
-    private final AuditoriaEliminacionDao auditoriaDao;
     private final CuestionarioDao cuestionarioDao;
+
+    // Bajas lógicas (patrón Template Method): cada una completa los pasos variables de BajaLogica.
+    private final BajaLogica<Competencia> bajaCompetencia;
+    private final BajaLogica<Factor> bajaFactor;
+    private final BajaLogica<Pregunta> bajaPregunta;
+    private final BajaLogica<OpcionRespuesta> bajaOpcionRespuesta;
+    private final BajaLogica<Puesto> bajaPuesto;
 
     public CatalogoService(
             CompetenciaDao competenciaDao,
@@ -35,8 +46,12 @@ public class CatalogoService {
         this.opcionRespuestaDao = opcionRespuestaDao;
         this.preguntaDao = preguntaDao;
         this.puestoDao = puestoDao;
-        this.auditoriaDao = auditoriaDao;
         this.cuestionarioDao = cuestionarioDao;
+        this.bajaCompetencia = new BajaCompetencia(competenciaDao, factorDao, puestoDao, auditoriaDao);
+        this.bajaFactor = new BajaFactor(factorDao, preguntaDao, auditoriaDao);
+        this.bajaPregunta = new BajaPregunta(preguntaDao, auditoriaDao);
+        this.bajaOpcionRespuesta = new BajaOpcionRespuesta(opcionRespuestaDao, preguntaDao, auditoriaDao);
+        this.bajaPuesto = new BajaPuesto(puestoDao, cuestionarioDao, auditoriaDao);
     }
 
     /** Resultado de la verificación previa a una baja (CU011 y CU015, paso 2). */
@@ -105,34 +120,15 @@ public class CatalogoService {
 
     @Transactional
     public void darBajaCompetencia(Long id, String usuarioActor) {
-        Competencia c = competenciaDao.findById(id)
-                .filter(Competencia::isActiva)
-                .orElseThrow(() -> new BusinessException("Competencia no encontrada"));
-
-        EnUsoDTO uso = verificarUsoCompetencia(id);
-        if (uso.enUso()) {
-            throw new BusinessException(uso.mensaje());
-        }
-
-        c.setActiva(false);
-        competenciaDao.save(c);
-        registrarAuditoria("COMPETENCIA", c.getId(), c.getNombre(), usuarioActor, "Baja lógica de competencia");
+        bajaCompetencia.ejecutar(id, usuarioActor);
     }
 
     /** CU015 paso 2: la competencia está en uso si tiene factores o está asociada a un puesto. */
     public EnUsoDTO verificarUsoCompetencia(Long id) {
-        Competencia c = competenciaDao.findById(id)
-                .filter(Competencia::isActiva)
-                .orElseThrow(() -> new BusinessException("Competencia no encontrada"));
-        boolean tieneFactores = !factorDao.findByCompetenciaIdAndActivoTrueOrderByNroOrdenAsc(id).isEmpty();
-        boolean enUsoEnPuesto = puestoDao.findByActivoTrueOrderByNombreAsc().stream()
-                .flatMap(p -> p.getCompetencias().stream())
-                .anyMatch(pc -> pc.getCompetencia().getId().equals(id));
-        if (tieneFactores || enUsoEnPuesto) {
-            return new EnUsoDTO(true, "La competencia " + c.getNombre()
-                    + " está siendo usada en la base de datos y no puede eliminarse");
-        }
-        return new EnUsoDTO(false, "Los datos de la competencia " + c.getNombre() + " serán eliminados del sistema");
+        Competencia c = bajaCompetencia.buscarActiva(id);
+        return bajaCompetencia.motivoPorElQueNoSePuedeEliminar(c)
+                .map(motivo -> new EnUsoDTO(true, motivo))
+                .orElseGet(() -> new EnUsoDTO(false, "Los datos de la competencia " + c.getNombre() + " serán eliminados del sistema"));
     }
 
     public List<Factor> buscarFactores(Long competenciaId, String nombre) {
@@ -188,20 +184,7 @@ public class CatalogoService {
 
     @Transactional
     public void darBajaFactor(Long id, String usuarioActor) {
-        Factor f = factorDao.findById(id)
-                .filter(Factor::isActivo)
-                .orElseThrow(() -> new BusinessException("Factor no encontrado"));
-
-        List<Pregunta> preguntasAsociadas = preguntaDao.findByFactorIdAndActivaTrueOrderByIdAsc(id);
-        for (Pregunta p : preguntasAsociadas) {
-            p.setActiva(false);
-            preguntaDao.save(p);
-            registrarAuditoria("PREGUNTA", p.getId(), p.getNombre(), usuarioActor, "Baja lógica por eliminación de factor " + f.getNombre());
-        }
-
-        f.setActivo(false);
-        factorDao.save(f);
-        registrarAuditoria("FACTOR", f.getId(), f.getNombre(), usuarioActor, "Baja lógica de factor");
+        bajaFactor.ejecutar(id, usuarioActor);
     }
 
     public List<OpcionRespuesta> buscarOpcionesRespuesta(String nombre) {
@@ -453,13 +436,7 @@ public class CatalogoService {
 
     @Transactional
     public void darBajaPregunta(Long id, String usuarioActor) {
-        Pregunta p = preguntaDao.findById(id)
-                .filter(Pregunta::isActiva)
-                .orElseThrow(() -> new BusinessException("Pregunta no encontrada"));
-
-        p.setActiva(false);
-        preguntaDao.save(p);
-        registrarAuditoria("PREGUNTA", p.getId(), p.getNombre(), usuarioActor, "Baja lógica de pregunta");
+        bajaPregunta.ejecutar(id, usuarioActor);
     }
 
     private Map<Long, BigDecimal> normalizarYValidarPonderaciones(OpcionRespuesta op, Map<Long, BigDecimal> ponderaciones) {
@@ -611,16 +588,7 @@ public class CatalogoService {
 
     @Transactional
     public void darBajaOpcionRespuesta(Long id, String usuarioActor) {
-        OpcionRespuesta op = opcionRespuestaDao.findById(id)
-                .filter(OpcionRespuesta::isActiva)
-                .orElseThrow(() -> new BusinessException("Opción de respuesta no encontrada"));
-        if (preguntaDao.existsByOpcionRespuestaIdAndActivaTrue(id)) {
-            throw new BusinessException("La opción de respuesta " + op.getNombre()
-                    + " está siendo usada en la base de datos y no puede eliminarse");
-        }
-        op.setActiva(false);
-        opcionRespuestaDao.save(op);
-        registrarAuditoria("OPCION_RESPUESTA", op.getId(), op.getNombre(), usuarioActor, "Baja lógica de opción de respuesta");
+        bajaOpcionRespuesta.ejecutar(id, usuarioActor);
     }
 
     // ------------------------------------------------------------------ Puestos (CU010 y CU011)
@@ -703,38 +671,15 @@ public class CatalogoService {
 
     /** CU011 paso 2: el puesto está en uso si tiene evaluaciones (cuestionarios) asociadas. */
     public EnUsoDTO verificarUsoPuesto(Long id) {
-        Puesto puesto = puestoDao.findById(id)
-                .filter(Puesto::isActivo)
-                .orElseThrow(() -> new BusinessException("Puesto no encontrado"));
-        if (cuestionarioDao.existsByPuestoId(id)) {
-            return new EnUsoDTO(true, "El puesto " + puesto.getNombre()
-                    + " está siendo usado en la base de datos y no puede eliminarse");
-        }
-        return new EnUsoDTO(false, "Los datos del puesto " + puesto.getNombre() + " serán eliminados del sistema");
+        Puesto puesto = bajaPuesto.buscarActiva(id);
+        return bajaPuesto.motivoPorElQueNoSePuedeEliminar(puesto)
+                .map(motivo -> new EnUsoDTO(true, motivo))
+                .orElseGet(() -> new EnUsoDTO(false, "Los datos del puesto " + puesto.getNombre() + " serán eliminados del sistema"));
     }
 
     @Transactional
     public void darBajaPuesto(Long id, String usuarioActor) {
-        EnUsoDTO uso = verificarUsoPuesto(id);
-        if (uso.enUso()) {
-            throw new BusinessException(uso.mensaje());
-        }
-        Puesto puesto = puestoDao.findById(id)
-                .orElseThrow(() -> new BusinessException("Puesto no encontrado"));
-        puesto.setActivo(false);
-        puestoDao.save(puesto);
-        registrarAuditoria("PUESTO", puesto.getId(), puesto.getNombre(), usuarioActor, "Baja lógica de puesto");
-    }
-
-    private void registrarAuditoria(String entidad, Long entidadId, String identificador, String usuarioActor, String detalle) {
-        AuditoriaEliminacion aud = new AuditoriaEliminacion();
-        aud.setEntidad(entidad);
-        aud.setEntidadId(entidadId);
-        aud.setIdentificador(identificador);
-        aud.setUsuarioActor(usuarioActor == null || usuarioActor.isBlank() ? "CONSULTOR" : usuarioActor.trim().toUpperCase());
-        aud.setFechaHora(LocalDateTime.now());
-        aud.setDetalle(detalle);
-        auditoriaDao.save(aud);
+        bajaPuesto.ejecutar(id, usuarioActor);
     }
 
     /** El alta de pregunta del enunciado no pide código: se arma a partir del factor (PREG-GP-01-03). */

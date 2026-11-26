@@ -18,23 +18,16 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * Cliente del servicio externo de IA que usa CU033 (Google Gemini, API REST "generateContent").
+ * Estrategia concreta de {@link ProveedorIA} (patrón Strategy): Google Gemini, API REST "generateContent".
  *
  * La clave es personal y va en application.properties (gemini.api.key), que no se sube al repositorio.
  * El modelo se puede cambiar con gemini.model sin tocar el código.
  */
 @Component
-public class ClienteGemini {
+public class ClienteGemini implements ProveedorIA {
 
     private static final Logger log = LoggerFactory.getLogger(ClienteGemini.class);
     private static final String MODELO_POR_DEFECTO = "gemini-3.5-flash-lite";
-
-    /** Falla al comunicarse con el servicio. El mensaje explica la causa en palabras simples. */
-    public static class ServicioIAException extends RuntimeException {
-        public ServicioIAException(String mensaje) {
-            super(mensaje);
-        }
-    }
 
     private record Respuesta(int status, JsonNode json) {
         String mensajeError() {
@@ -72,6 +65,7 @@ public class ClienteGemini {
      * Si la API rechaza el formato de salida estructurada (error 400), reintenta una vez sin él:
      * el pedido también le indica en el texto que responda solo con JSON.
      */
+    @Override
     public String generarJson(String prompt, ObjectNode esquema) {
         if (clave.isEmpty()) {
             throw new ServicioIAException(
