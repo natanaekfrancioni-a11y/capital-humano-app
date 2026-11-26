@@ -7,7 +7,8 @@ Trabajo Práctico Integrador de **Diseño de Sistemas de Información** y **Desa
 * **Autenticación (CU001):** ingreso como consultor (usuario y contraseña) o para realizar un cuestionario (documento y clave).
 * **Catálogo y Estructura:** gestión de puestos/funciones, competencias, factores, preguntas con opciones ponderadas y opciones de respuesta; importación de candidatos desde CSV.
 * **Evaluación y Cuestionario:** asistente de evaluación con claves de ingreso y exportación a Excel (.xls); cuestionario por bloques con cronómetro, control de tiempo máximo, vencimiento y cantidad de accesos.
-* **Reportes:** **Orden de mérito** por puesto y evaluación (cumple mínimos por competencia, no alcanza mínimos y no completados) y **Reporte comparativo** (tabla y gráfico), ambos imprimibles.
+* **Reportes:** **Orden de mérito** por puesto y evaluación (cumple mínimos por competencia, no alcanza mínimos y no completados) y **Reporte comparativo** (tabla y gráfico), ambos imprimibles. **Exportar resultados** (CU007): archivo CSV con el resultado de cada candidato evaluado en una función, competencia por competencia.
+* **Generar pregunta con IA (CU033):** propone una pregunta nueva para un factor usando la API de Gemini.
 
 ## Estructura del Repositorio
 
@@ -50,12 +51,7 @@ mvn spring-boot:run
 
 Para usar **Generar con IA** (CU033) hace falta además una clave de Gemini: ver la sección de abajo.
 
-Pruebas unitarias (JUnit 5 + Mockito):
-
-```bash
-cd api
-mvn test
-```
+Para correr las pruebas unitarias y ver la cobertura, ver [Pruebas unitarias y cobertura](#pruebas-unitarias-y-cobertura).
 
 ### 3. Frontend (`/frontend`)
 
@@ -109,6 +105,7 @@ Por defecto se usa el modelo `gemini-3.5-flash-lite`, que en el plan gratuito pe
 | `/cuestionario` | CU026 Completar cuestionario (el candidato entra por `/`) |
 | `/reportes/comparativo` | CU027 Emitir reporte comparativo |
 | `/reportes/orden-merito` | CU028 Emitir orden de mérito |
+| `/reportes/exportar` | CU007 Exportar resultados |
 
 ## Endpoints por Caso de Uso
 
@@ -119,6 +116,9 @@ Los errores de negocio responden `400` con `{ "error": "...", "detalles": ["..."
 | CU001 | `POST /api/auth/consultor` `{ username, password }` |
 | CU001 | `POST /api/auth/candidato` `{ tipoDocumento, nroDocumento, clave }` |
 | CU006 | `POST /api/candidatos/importar` `{ nombreArchivo, contenido }` (texto del CSV) |
+| CU007 | `GET /api/exportacion/puestos?nombre=&empresa=&desde=&hasta=` (al menos un filtro; fechas `aaaa-mm-dd`) |
+| CU007 | `GET /api/exportacion/puestos/{puestoId}/candidatos?desde=&hasta=` |
+| CU007 | `GET /api/exportacion/puestos/{puestoId}/csv?desde=&hasta=` (devuelve `{ nombreArchivo, contenido, filas }`; la pantalla guarda el archivo) |
 | CU008 | `GET /api/catalogo/puestos?codigo=&nombre=&empresa=` |
 | CU009 | `POST /api/catalogo/puestos` |
 | CU010 | `PUT /api/catalogo/puestos/{id}` |
@@ -154,6 +154,42 @@ Los errores de negocio responden `400` con `{ "error": "...", "detalles": ["..."
 | CU028 | `GET /api/reportes/orden-merito?puestoId=&evaluacion=TODAS&emitidoPor=` |
 
 Una **evaluación** es el grupo de cuestionarios que se generan juntos en el CU025 para un puesto: comparten la fecha de creación y se numeran `EVA-001`, `EVA-002`, ... por puesto.
+
+## Patrones de diseño
+
+| Patrón | Dónde está | Para qué se usa |
+|---|---|---|
+| **DAO** | `api/.../dao/*Dao` | Los servicios leen y guardan solo a través de estas interfaces (Spring Data JPA); no conocen SQL ni la base. |
+| **Template Method** | `service/baja/BajaLogica` y sus subclases `BajaPuesto`, `BajaCompetencia`, `BajaFactor`, `BajaPregunta`, `BajaOpcionRespuesta` | Las cinco bajas lógicas (CU011, CU015, CU019, CU023, CU031) siguen los mismos pasos en el mismo orden: buscar, verificar que no esté en uso, dar de baja lo asociado, desactivar, guardar y auditar. `ejecutar` es el método plantilla (final); cada subclase completa solo lo que cambia. |
+| **State** | `service/estado/`: `EstadoCuestionario`, `EstadoActivo`, `EstadoEnProceso` y los estados finales | Lo que se puede hacer con un cuestionario (vencer, ingresar, responder, completar) depende de su estado. Cada estado tiene sus reglas y hace sus propias transiciones, sin `if` por estado en los servicios. |
+| **Strategy** | `service/ProveedorIA` (estrategia), `ClienteGemini` (estrategia concreta), `GeneradorPreguntaIAService` (contexto) | El CU033 no depende de Gemini: usar otro proveedor de IA es agregar otra clase que implemente `ProveedorIA`. En los tests se usa un proveedor falso. |
+| **Builder** | `service/exportacion/ArchivoCsv` | El CSV del CU007 se arma paso a paso (nombre, columnas, una fila por vez) y se valida al construirlo; el formato (separador, comillas, fin de línea) está en un solo lugar. |
+
+**Herencia y polimorfismo:** `BajaLogica<T>` es abstracta y cada baja la extiende; `CatalogoService` las usa como `BajaLogica<Puesto>`, `BajaLogica<Factor>`, etc. `EstadoBase` define el comportamiento de un estado final y `EstadoActivo` y `EstadoEnProceso` redefinen lo que les corresponde; `EvaluacionCuestionarioService` llama a `estado.registrarIngreso(...)` o `estado.completar(...)` sin preguntar en qué estado está el cuestionario.
+
+## Pruebas unitarias y cobertura
+
+Pruebas de la capa de servicio con **JUnit 5 + Mockito** (186 tests). No necesitan PostgreSQL ni la clave de Gemini: los DAOs se reemplazan con mocks y la API de Gemini con un servidor HTTP local.
+
+```bash
+cd api
+mvn test
+```
+
+Al terminar, el informe de cobertura de **JaCoCo** queda en `api/target/site/jacoco/index.html`. Para ver cada archivo, entrá al paquete `ar.edu.utn.frsf.isi.capitalhumano.service` (y a sus subpaquetes `baja`, `estado` y `exportacion`). Desde IntelliJ también se puede: clic derecho en `api/src/test/java` → **More Run/Debug** → **Run 'All Tests' with Coverage**.
+
+| Clase de test | Qué prueba |
+|---|---|
+| `CatalogoServiceTest` | Altas, modificaciones, búsquedas y bajas de puestos, competencias, factores, preguntas y opciones de respuesta |
+| `EvaluacionCuestionarioServiceTest` | CU025 (validaciones, claves y generación de cuestionarios) y CU026 (sorteo de preguntas, bloques y puntaje) |
+| `VigenciaCuestionarioServiceTest`, `estado/EstadosCuestionarioTest` | Vencimientos de CU026 y transiciones de estado (State) |
+| `ReporteServiceTest` | CU027 Reporte comparativo y CU028 Orden de mérito |
+| `ExportacionResultadosServiceTest`, `exportacion/ArchivoCsvTest` | CU007 Exportar resultados y el Builder del CSV |
+| `GeneradorPreguntaIAServiceTest`, `ClienteGeminiTest` | CU033 (Strategy): el servicio con un proveedor de IA falso, y el cliente de Gemini contra un servidor local |
+| `AuthServiceTest`, `CandidatoImportServiceTest` | CU001 Autenticar y CU006 Importar candidatos |
+| `baja/BajaLogicaTest` | El orden fijo de los pasos de una baja (Template Method) |
+
+Los mocks usan el modo estricto de Mockito (`MockitoExtension`): un test falla si prepara una respuesta que el servicio nunca usa, o si el servicio llama a un método preparado pero con otros datos.
 
 ## Diseño del Frontend
 
