@@ -1,4 +1,7 @@
 import type {
+  ArchivoExportado,
+  CandidatoExportable,
+  PuestoExportable,
   Candidato,
   CandidatoClave,
   CandidatoEvaluado,
@@ -210,4 +213,12 @@ export const api = {
     pedir<CandidatoEvaluado[]>('GET', '/api/reportes/comparativo/candidatos', { consulta: { puestoId } }),
   reporteComparativo: (cuestionarioId: number) =>
     pedir<ReporteComparativo>('GET', '/api/reportes/comparativo', { consulta: { cuestionarioId } }),
+
+  // CU007
+  buscarPuestosExportables: (filtros: { nombre?: string; empresa?: string; desde?: string; hasta?: string }) =>
+    pedir<PuestoExportable[]>('GET', '/api/exportacion/puestos', { consulta: filtros }),
+  candidatosExportables: (puestoId: number, periodo: { desde?: string; hasta?: string }) =>
+    pedir<CandidatoExportable[]>('GET', `/api/exportacion/puestos/${puestoId}/candidatos`, { consulta: periodo }),
+  exportarResultados: (puestoId: number, periodo: { desde?: string; hasta?: string }) =>
+    pedir<ArchivoExportado>('GET', `/api/exportacion/puestos/${puestoId}/csv`, { consulta: periodo }),
 };

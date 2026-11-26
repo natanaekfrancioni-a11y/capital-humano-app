@@ -260,3 +260,29 @@ export interface SesionCandidato {
   cuestionarioId: number;
   estado: EstadoCuestionario;
 }
+
+// CU007 - Exportar resultados
+export interface PuestoExportable {
+  id: number;
+  codigo: string;
+  nombre: string;
+  empresa: string;
+  /** Candidatos evaluados (cuestionario completo), dentro del período si se indicó. */
+  evaluados: number;
+}
+
+export interface CandidatoExportable {
+  cuestionarioId: number;
+  nroCandidato: string;
+  apellido: string;
+  nombre: string;
+  tipoDocumento: string;
+  nroDocumento: string;
+  fechaFin: string;
+}
+
+export interface ArchivoExportado {
+  nombreArchivo: string;
+  contenido: string;
+  filas: number;
+}

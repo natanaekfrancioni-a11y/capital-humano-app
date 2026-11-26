@@ -24,6 +24,7 @@ const GRUPOS: { titulo: string; opciones: Opcion[] }[] = [
     opciones: [
       { href: '/reportes/orden-merito', titulo: 'Orden de mérito', detalle: 'Candidatos de un puesto ordenados por puntaje.', cu: 'CU028' },
       { href: '/reportes/comparativo', titulo: 'Reporte comparativo', detalle: 'Lo que pide el puesto frente a lo que obtuvo un candidato.', cu: 'CU027' },
+      { href: '/reportes/exportar', titulo: 'Exportar resultados', detalle: 'Archivo CSV con los resultados de los candidatos evaluados en una función.', cu: 'CU007' },
     ],
   },
   {
