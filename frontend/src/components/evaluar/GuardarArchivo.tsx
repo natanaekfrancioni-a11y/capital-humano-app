@@ -9,18 +9,15 @@ import { elegirCarpeta, puedeElegirCarpeta, type ManejadorCarpeta } from '@/lib/
 interface Props {
   abierto: boolean;
   nombreInicial: string;
-  /** Texto del campo "Tipo de archivo" (solo lectura). */
-  tipoArchivo?: string;
   alCancelar: () => void;
   alGuardar: (carpeta: ManejadorCarpeta | null, nombreArchivo: string) => Promise<void>;
 }
 
 /**
- * Pantalla para elegir la carpeta y el nombre del archivo a guardar.
- * La usan CU025 (Excel con las claves, pasos 15 y 16) y CU007 (CSV con los resultados, pasos 8 y 9).
+ * CU025 pasos 15 y 16: pantalla para elegir la carpeta y guardar el Excel.
  * En Chrome/Edge se usa el selector de carpetas del sistema; en otros navegadores, la descarga.
  */
-export function GuardarArchivo({ abierto, nombreInicial, tipoArchivo = 'Excel (*.xls)', alCancelar, alGuardar }: Props) {
+export function GuardarArchivo({ abierto, nombreInicial, alCancelar, alGuardar }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const [carpeta, setCarpeta] = useState<ManejadorCarpeta | null>(null);
   const [nombre, setNombre] = useState(nombreInicial);
@@ -105,7 +102,7 @@ export function GuardarArchivo({ abierto, nombreInicial, tipoArchivo = 'Excel (*
             </p>
           )}
           <CampoTexto etiqueta="Nombre de archivo" obligatorio valor={nombre} alCambiar={setNombre} mayusculas={false} maximo={100} />
-          <CampoTexto etiqueta="Tipo de archivo" valor={tipoArchivo} alCambiar={() => undefined} readOnly mayusculas={false} />
+          <CampoTexto etiqueta="Tipo de archivo" valor="Excel (*.xls)" alCambiar={() => undefined} readOnly mayusculas={false} />
         </div>
         <p className="mt-3 text-chica text-grafito-claro">Si ya existe un archivo con ese nombre en la carpeta, se reemplaza.</p>
         <div className="mt-6 flex justify-end gap-2.5 border-t border-linea pt-4">

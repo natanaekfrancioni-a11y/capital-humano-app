@@ -1,10 +1,8 @@
 package ar.edu.utn.frsf.isi.capitalhumano.controller;
 
 import ar.edu.utn.frsf.isi.capitalhumano.service.ReporteService;
-import ar.edu.utn.frsf.isi.capitalhumano.service.ReporteService.CandidatoEvaluadoDTO;
 import ar.edu.utn.frsf.isi.capitalhumano.service.ReporteService.EvaluacionesPuestoDTO;
 import ar.edu.utn.frsf.isi.capitalhumano.service.ReporteService.PuestoResumenDTO;
-import ar.edu.utn.frsf.isi.capitalhumano.service.ReporteService.ReporteComparativoDTO;
 import ar.edu.utn.frsf.isi.capitalhumano.service.ReporteService.ReporteOrdenMeritoDTO;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
@@ -15,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** CU027 - Emitir reporte comparativo y CU028 - Emitir orden de mérito. */
+/** CU028 - Emitir orden de mérito. */
 @RestController
 @RequestMapping("/api/reportes")
 @CrossOrigin(origins = "*")
@@ -49,17 +47,5 @@ public class ReporteController {
             @RequestParam(defaultValue = ReporteService.TODAS) String evaluacion,
             @RequestParam(required = false) String emitidoPor) {
         return ResponseEntity.ok(reporteService.emitirOrdenDeMerito(puestoId, evaluacion, emitidoPor));
-    }
-
-    /** CU027 paso 5: candidatos con cuestionario completo para el puesto. */
-    @GetMapping("/comparativo/candidatos")
-    public ResponseEntity<List<CandidatoEvaluadoDTO>> candidatosEvaluados(@RequestParam Long puestoId) {
-        return ResponseEntity.ok(reporteService.listarCandidatosEvaluados(puestoId));
-    }
-
-    /** CU027 paso 7: requerido vs obtenido por competencia. */
-    @GetMapping("/comparativo")
-    public ResponseEntity<ReporteComparativoDTO> comparativo(@RequestParam Long cuestionarioId) {
-        return ResponseEntity.ok(reporteService.generarReporteComparativo(cuestionarioId));
     }
 }

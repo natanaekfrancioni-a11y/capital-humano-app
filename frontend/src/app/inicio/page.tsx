@@ -16,25 +16,18 @@ const GRUPOS: { titulo: string; opciones: Opcion[] }[] = [
     titulo: 'Evaluación',
     opciones: [
       { href: '/evaluar', titulo: 'Evaluar candidatos', detalle: 'Elegir candidatos y un puesto, y generar sus claves de ingreso.', cu: 'CU025' },
-      { href: '/candidatos/importar', titulo: 'Importar candidatos', detalle: 'Cargar el archivo CSV del sistema de candidatos y CV.', cu: 'CU006' },
     ],
   },
   {
     titulo: 'Reportes',
     opciones: [
       { href: '/reportes/orden-merito', titulo: 'Orden de mérito', detalle: 'Candidatos de un puesto ordenados por puntaje.', cu: 'CU028' },
-      { href: '/reportes/comparativo', titulo: 'Reporte comparativo', detalle: 'Lo que pide el puesto frente a lo que obtuvo un candidato.', cu: 'CU027' },
-      { href: '/reportes/exportar', titulo: 'Exportar resultados', detalle: 'Archivo CSV con los resultados de los candidatos evaluados en una función.', cu: 'CU007' },
     ],
   },
   {
     titulo: 'Estructura de evaluación',
     opciones: [
-      { href: '/puestos', titulo: 'Puestos', detalle: 'Funciones y la ponderación que exigen en cada competencia.', cu: 'CU008' },
-      { href: '/competencias', titulo: 'Competencias', detalle: 'Capacidades técnicas y actitudinales a evaluar.', cu: 'CU012' },
-      { href: '/factores', titulo: 'Factores', detalle: 'Aspectos que componen cada competencia.', cu: 'CU016' },
       { href: '/preguntas', titulo: 'Preguntas', detalle: 'Banco de preguntas por factor, con sus ponderaciones.', cu: 'CU020' },
-      { href: '/opciones-respuesta', titulo: 'Opciones de respuesta', detalle: 'Escalas reutilizables para responder las preguntas.', cu: 'CU024' },
     ],
   },
 ];

@@ -126,11 +126,6 @@ export interface Configuracion {
   instrucciones: string;
 }
 
-export interface EnUso {
-  enUso: boolean;
-  mensaje: string;
-}
-
 // CU025
 export interface CompetenciaPuesto {
   competenciaId: number;
@@ -204,48 +199,6 @@ export interface ReporteOrdenMerito {
   restantes: FilaOrdenMerito[];
 }
 
-// CU027
-export interface CandidatoEvaluado {
-  cuestionarioId: number;
-  candidatoId: number;
-  nroCandidato: string;
-  apellido: string;
-  nombre: string;
-  tipoDocumento: string;
-  nroDocumento: string;
-  fechaFin: string | null;
-}
-
-export interface ItemComparativo {
-  competencia: string;
-  requerido: number;
-  obtenido: number;
-  diferencia: number;
-  cumple: boolean;
-}
-
-export interface ReporteComparativo {
-  puestoCodigo: string;
-  puestoNombre: string;
-  empresa: string;
-  apellido: string;
-  nombre: string;
-  tipoDocumento: string;
-  nroDocumento: string;
-  nroCandidato: string;
-  fechaFin: string | null;
-  puntajeTotal: number;
-  competencias: ItemComparativo[];
-}
-
-// CU006
-export interface ResumenImportacion {
-  creados: number;
-  actualizados: number;
-  eliminados: number;
-  totalProcesados: number;
-}
-
 // CU001
 export interface SesionConsultor {
   perfil: 'CONSULTOR';
@@ -259,30 +212,4 @@ export interface SesionCandidato {
   candidatoNombre: string;
   cuestionarioId: number;
   estado: EstadoCuestionario;
-}
-
-// CU007 - Exportar resultados
-export interface PuestoExportable {
-  id: number;
-  codigo: string;
-  nombre: string;
-  empresa: string;
-  /** Candidatos evaluados (cuestionario completo), dentro del período si se indicó. */
-  evaluados: number;
-}
-
-export interface CandidatoExportable {
-  cuestionarioId: number;
-  nroCandidato: string;
-  apellido: string;
-  nombre: string;
-  tipoDocumento: string;
-  nroDocumento: string;
-  fechaFin: string;
-}
-
-export interface ArchivoExportado {
-  nombreArchivo: string;
-  contenido: string;
-  filas: number;
 }

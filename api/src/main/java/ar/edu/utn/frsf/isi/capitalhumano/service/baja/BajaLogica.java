@@ -9,8 +9,8 @@ import java.util.Optional;
 /**
  * Patrón Template Method.
  *
- * Todas las bajas del catálogo (CU011 puesto, CU015 competencia, CU019 factor, CU023 pregunta y
- * CU031 opción de respuesta) son bajas lógicas y siguen los mismos pasos, siempre en el mismo orden:
+ * Una baja del catálogo (en esta entrega, CU023 Dar de baja pregunta) es una baja lógica y sigue
+ * siempre los mismos pasos, en el mismo orden:
  * <ol>
  *   <li>buscar el elemento activo (si no existe, se informa);</li>
  *   <li>verificar que no esté en uso;</li>
@@ -45,7 +45,7 @@ public abstract class BajaLogica<T> {
                 "Baja lógica de " + nombreParaMensajes());
     }
 
-    /** Paso 1: devuelve el elemento activo o informa que no existe. También lo usa la verificación previa (paso 2 de CU011 y CU015). */
+    /** Paso 1: devuelve el elemento activo o informa que no existe. */
     public final T buscarActiva(Long id) {
         return buscarPorId(id)
                 .filter(this::estaActiva)

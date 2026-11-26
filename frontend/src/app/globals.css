@@ -119,7 +119,7 @@
     border-width: 2px;
   }
 
-  /* Barra de avance de la importación (CU006): respuesta a una acción del usuario. */
+  /* Barra de avance mientras se genera la pregunta con IA (CU033): respuesta a una acción del usuario. */
   .barra-avance {
     animation: avance 1.4s ease-in-out infinite;
   }
@@ -144,7 +144,7 @@
   }
 }
 
-/* Impresión de reportes (CU027 y CU028): solo la hoja, sin barra ni botones. */
+/* Impresión del reporte (CU028): solo la hoja, sin barra ni botones. */
 @media print {
   html,
   body {

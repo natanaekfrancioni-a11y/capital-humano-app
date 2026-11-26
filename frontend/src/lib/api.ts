@@ -1,15 +1,10 @@
 import type {
-  ArchivoExportado,
-  CandidatoExportable,
-  PuestoExportable,
   Candidato,
   CandidatoClave,
-  CandidatoEvaluado,
   Competencia,
   CompetenciaPuesto,
   Configuracion,
   Cuestionario,
-  EnUso,
   EvaluacionesPuesto,
   Factor,
   OpcionRespuesta,
@@ -17,9 +12,7 @@ import type {
   PreguntaGenerada,
   Puesto,
   PuestoResumen,
-  ReporteComparativo,
   ReporteOrdenMerito,
-  ResumenImportacion,
   SesionCandidato,
   SesionConsultor,
 } from './tipos';
@@ -88,64 +81,16 @@ export const api = {
   ingresarCandidato: (tipoDocumento: string, nroDocumento: string, clave: string) =>
     pedir<SesionCandidato>('POST', '/api/auth/candidato', { cuerpo: { tipoDocumento, nroDocumento, clave } }),
 
-  // CU006
-  importarCandidatos: (nombreArchivo: string, contenido: string) =>
-    pedir<ResumenImportacion>('POST', '/api/candidatos/importar', { cuerpo: { nombreArchivo, contenido } }),
-
-  // CU012 a CU015
+  // Combos del CU020 y del CU021: competencias, factores y opciones de respuesta
   buscarCompetencias: (nombre?: string) => pedir<Competencia[]>('GET', '/api/catalogo/competencias', { consulta: { nombre } }),
-  crearCompetencia: (datos: { codigo: string; nombre: string; descripcion: string; tipo: string }) =>
-    pedir<Competencia>('POST', '/api/catalogo/competencias', { cuerpo: datos }),
-  modificarCompetencia: (id: number, datos: { nombre: string; descripcion: string }) =>
-    pedir<Competencia>('PUT', `/api/catalogo/competencias/${id}`, { cuerpo: datos }),
-  competenciaEnUso: (id: number) => pedir<EnUso>('GET', `/api/catalogo/competencias/${id}/en-uso`),
-  bajaCompetencia: (id: number, usuario: string) =>
-    pedir<void>('DELETE', `/api/catalogo/competencias/${id}`, { consulta: { usuario } }),
-
-  // CU016 a CU019
   buscarFactores: (competenciaId?: number | null, nombre?: string) =>
     pedir<Factor[]>('GET', '/api/catalogo/factores', { consulta: { competenciaId, nombre } }),
-  crearFactor: (datos: { competenciaId: number; codigo: string; nombre: string; descripcion: string; nroOrden: number }) =>
-    pedir<Factor>('POST', '/api/catalogo/factores', { cuerpo: datos }),
-  modificarFactor: (id: number, datos: { nombre: string; descripcion: string; nroOrden: number }) =>
-    pedir<Factor>('PUT', `/api/catalogo/factores/${id}`, { cuerpo: datos }),
-  bajaFactor: (id: number, usuario: string) =>
-    pedir<void>('DELETE', `/api/catalogo/factores/${id}`, { consulta: { usuario } }),
-
-  // CU024, CU029 a CU031
   buscarOpcionesRespuesta: (nombre?: string) =>
     pedir<OpcionRespuesta[]>('GET', '/api/catalogo/opciones-respuesta', { consulta: { nombre } }),
-  crearOpcionRespuesta: (datos: { nombre: string; descripcion: string; items: { nroOrden: number; descripcion: string }[] }) =>
-    pedir<OpcionRespuesta>('POST', '/api/catalogo/opciones-respuesta', { cuerpo: datos }),
-  modificarOpcionRespuesta: (
-    id: number,
-    datos: { descripcion: string; items: { id?: number; nroOrden: number; descripcion: string }[] },
-  ) => pedir<OpcionRespuesta>('PUT', `/api/catalogo/opciones-respuesta/${id}`, { cuerpo: datos }),
-  bajaOpcionRespuesta: (id: number, usuario: string) =>
-    pedir<void>('DELETE', `/api/catalogo/opciones-respuesta/${id}`, { consulta: { usuario } }),
 
-  // CU008 a CU011
+  // Puestos para elegir en el CU025 (paso 8)
   buscarPuestos: (filtros: { codigo?: string; nombre?: string; empresa?: string } = {}) =>
     pedir<Puesto[]>('GET', '/api/catalogo/puestos', { consulta: filtros }),
-  crearPuesto: (datos: {
-    codigo: string;
-    nombre: string;
-    empresa: string;
-    descripcion: string;
-    competencias: { competenciaId: number; ponderacionMinima: number }[];
-  }) => pedir<Puesto>('POST', '/api/catalogo/puestos', { cuerpo: datos }),
-  modificarPuesto: (
-    id: number,
-    datos: {
-      nombre: string;
-      empresa: string;
-      descripcion: string;
-      competencias: { competenciaId: number; ponderacionMinima: number }[];
-    },
-  ) => pedir<Puesto>('PUT', `/api/catalogo/puestos/${id}`, { cuerpo: datos }),
-  puestoEnUso: (id: number) => pedir<EnUso>('GET', `/api/catalogo/puestos/${id}/en-uso`),
-  bajaPuesto: (id: number, usuario: string) =>
-    pedir<void>('DELETE', `/api/catalogo/puestos/${id}`, { consulta: { usuario } }),
 
   // CU020 a CU023
   buscarPreguntas: (filtros: { competenciaId?: number | null; factorId?: number | null; nombre?: string }) =>
@@ -207,18 +152,4 @@ export const api = {
     pedir<EvaluacionesPuesto>('GET', `/api/reportes/puestos/${puestoId}/evaluaciones`),
   ordenDeMerito: (puestoId: number, evaluacion: string, emitidoPor: string) =>
     pedir<ReporteOrdenMerito>('GET', '/api/reportes/orden-merito', { consulta: { puestoId, evaluacion, emitidoPor } }),
-
-  // CU027
-  candidatosEvaluados: (puestoId: number) =>
-    pedir<CandidatoEvaluado[]>('GET', '/api/reportes/comparativo/candidatos', { consulta: { puestoId } }),
-  reporteComparativo: (cuestionarioId: number) =>
-    pedir<ReporteComparativo>('GET', '/api/reportes/comparativo', { consulta: { cuestionarioId } }),
-
-  // CU007
-  buscarPuestosExportables: (filtros: { nombre?: string; empresa?: string; desde?: string; hasta?: string }) =>
-    pedir<PuestoExportable[]>('GET', '/api/exportacion/puestos', { consulta: filtros }),
-  candidatosExportables: (puestoId: number, periodo: { desde?: string; hasta?: string }) =>
-    pedir<CandidatoExportable[]>('GET', `/api/exportacion/puestos/${puestoId}/candidatos`, { consulta: periodo }),
-  exportarResultados: (puestoId: number, periodo: { desde?: string; hasta?: string }) =>
-    pedir<ArchivoExportado>('GET', `/api/exportacion/puestos/${puestoId}/csv`, { consulta: periodo }),
 };

@@ -27,7 +27,7 @@ import java.util.Objects;
 import java.util.TreeMap;
 
 /**
- * GestorReportes: CU027 (Emitir reporte comparativo) y CU028 (Emitir orden de mérito).
+ * GestorReportes: CU028 (Emitir orden de mérito).
  *
  * Una "evaluación" es el conjunto de cuestionarios generados juntos para un puesto en el CU025:
  * se identifican por su fecha de creación (al segundo) y se numeran EVA-001, EVA-002, ...
@@ -81,18 +81,6 @@ public class ReporteService {
             LocalDateTime fechaEmision, String emitidoPor, List<CompetenciaRequeridaDTO> competencias,
             List<FilaOrdenMeritoDTO> ordenMerito, List<FilaOrdenMeritoDTO> noAlcanzanMinimo,
             List<FilaOrdenMeritoDTO> restantes) {}
-
-    public record CandidatoEvaluadoDTO(
-            Long cuestionarioId, Long candidatoId, String nroCandidato, String apellido, String nombre,
-            String tipoDocumento, String nroDocumento, LocalDateTime fechaFin) {}
-
-    public record ItemComparativoDTO(
-            String competencia, BigDecimal requerido, BigDecimal obtenido, BigDecimal diferencia, boolean cumple) {}
-
-    public record ReporteComparativoDTO(
-            String puestoCodigo, String puestoNombre, String empresa,
-            String apellido, String nombre, String tipoDocumento, String nroDocumento, String nroCandidato,
-            LocalDateTime fechaFin, BigDecimal puntajeTotal, List<ItemComparativoDTO> competencias) {}
 
     // ------------------------------------------------------------------ CU028
 
@@ -209,60 +197,6 @@ public class ReporteService {
                 puesto.getCodigo(), puesto.getNombre(), puesto.getEmpresa(), evaluacionElegida,
                 LocalDateTime.now(), emitidoPor == null || emitidoPor.isBlank() ? "-" : emitidoPor.trim(),
                 competencias, ordenMerito, noCumplen, restantes);
-    }
-
-    // ------------------------------------------------------------------ CU027
-
-    /** CU027 paso 5: candidatos evaluados (cuestionario Completo) en el puesto. */
-    public List<CandidatoEvaluadoDTO> listarCandidatosEvaluados(Long puestoId) {
-        Puesto puesto = buscarPuesto(puestoId);
-        List<CandidatoEvaluadoDTO> evaluados = cuestionarioDao.findByPuestoIdOrderByIdAsc(puestoId).stream()
-                .filter(q -> "COMPLETO".equals(q.getEstado()))
-                .map(q -> {
-                    Candidato c = q.getCandidato();
-                    return new CandidatoEvaluadoDTO(
-                            q.getId(), c.getId(), c.getNroCandidato(), c.getApellido(), c.getNombre(),
-                            c.getTipoDocumento(), c.getNroDocumento(), q.getFechaFin());
-                })
-                .sorted(Comparator.comparing(CandidatoEvaluadoDTO::apellido)
-                        .thenComparing(CandidatoEvaluadoDTO::nombre))
-                .toList();
-        if (evaluados.isEmpty()) {
-            throw new BusinessException("No existen candidatos con cuestionarios completos para el puesto: "
-                    + puesto.getNombre() + ".");
-        }
-        return evaluados;
-    }
-
-    /** CU027 paso 7: requerido vs obtenido por competencia para un cuestionario completo. */
-    public ReporteComparativoDTO generarReporteComparativo(Long cuestionarioId) {
-        Cuestionario q = cuestionarioDao.findById(cuestionarioId)
-                .orElseThrow(() -> new BusinessException("Cuestionario no encontrado"));
-        if (!"COMPLETO".equals(q.getEstado())) {
-            throw new BusinessException("El candidato no tiene un cuestionario completo para el puesto");
-        }
-
-        Map<Long, BigDecimal> porCompetencia = puntajesPorCompetencia(q);
-        List<ItemComparativoDTO> items = q.getPuesto().getCompetencias().stream()
-                .sorted(Comparator.comparing(pc -> pc.getCompetencia().getNombre()))
-                .map(pc -> {
-                    BigDecimal requerido = pc.getPonderacionMinima().setScale(2, RoundingMode.HALF_UP);
-                    BigDecimal obtenido = porCompetencia
-                            .getOrDefault(pc.getCompetencia().getId(), BigDecimal.ZERO)
-                            .setScale(2, RoundingMode.HALF_UP);
-                    return new ItemComparativoDTO(
-                            pc.getCompetencia().getNombre(), requerido, obtenido,
-                            obtenido.subtract(requerido), obtenido.compareTo(requerido) >= 0);
-                })
-                .toList();
-
-        Candidato c = q.getCandidato();
-        Puesto p = q.getPuesto();
-        BigDecimal total = q.getPuntajeTotal() != null ? q.getPuntajeTotal() : promedio(porCompetencia);
-        return new ReporteComparativoDTO(
-                p.getCodigo(), p.getNombre(), p.getEmpresa(),
-                c.getApellido(), c.getNombre(), c.getTipoDocumento(), c.getNroDocumento(), c.getNroCandidato(),
-                q.getFechaFin(), total, items);
     }
 
     // ------------------------------------------------------------------ cálculo de puntajes

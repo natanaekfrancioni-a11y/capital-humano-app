@@ -1,7 +1,6 @@
 package ar.edu.utn.frsf.isi.capitalhumano.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -19,12 +18,9 @@ import ar.edu.utn.frsf.isi.capitalhumano.model.Factor;
 import ar.edu.utn.frsf.isi.capitalhumano.model.OpcionRespuesta;
 import ar.edu.utn.frsf.isi.capitalhumano.model.Puesto;
 import ar.edu.utn.frsf.isi.capitalhumano.model.RespuestaCuestionario;
-import ar.edu.utn.frsf.isi.capitalhumano.service.ReporteService.CandidatoEvaluadoDTO;
 import ar.edu.utn.frsf.isi.capitalhumano.service.ReporteService.EvaluacionesPuestoDTO;
 import ar.edu.utn.frsf.isi.capitalhumano.service.ReporteService.FilaOrdenMeritoDTO;
-import ar.edu.utn.frsf.isi.capitalhumano.service.ReporteService.ItemComparativoDTO;
 import ar.edu.utn.frsf.isi.capitalhumano.service.ReporteService.PuestoResumenDTO;
-import ar.edu.utn.frsf.isi.capitalhumano.service.ReporteService.ReporteComparativoDTO;
 import ar.edu.utn.frsf.isi.capitalhumano.service.ReporteService.ReporteOrdenMeritoDTO;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -39,7 +35,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-/** CU027 (reporte comparativo) y CU028 (orden de mérito). */
+/** CU028 (orden de mérito) y el cálculo de puntajes por competencia. */
 @ExtendWith(MockitoExtension.class)
 class ReporteServiceTest {
 
@@ -259,89 +255,6 @@ class ReporteServiceTest {
                 assertThrows(BusinessException.class, () -> service.emitirOrdenDeMerito(1L, "EVA-009", "X")).getMessage());
         assertTrue(assertThrows(BusinessException.class, () -> service.emitirOrdenDeMerito(1L, null, "X"))
                 .getMessage().contains("no posee evaluaciones registradas"));
-    }
-
-    // ------------------------------------------------------------------ CU027
-
-    @Test
-    void listarCandidatosEvaluados_soloCompletosOrdenadosPorApellido() {
-        when(puestoDao.findById(1L)).thenReturn(Optional.of(pm));
-        when(cuestionarioDao.findByPuestoIdOrderByIdAsc(1L)).thenReturn(todos());
-
-        List<CandidatoEvaluadoDTO> evaluados = service.listarCandidatosEvaluados(1L);
-
-        assertEquals(3, evaluados.size());
-        assertEquals("BENITEZ", evaluados.get(0).apellido());
-        assertEquals("GUTIERREZ", evaluados.get(1).apellido());
-        assertEquals("SOSA", evaluados.get(2).apellido());
-        assertEquals(2L, evaluados.get(2).cuestionarioId());
-        assertEquals(EVALUACION_1.plusHours(2), evaluados.get(2).fechaFin());
-    }
-
-    @Test
-    void listarCandidatosEvaluados_sinCompletos_informa() {
-        when(puestoDao.findById(1L)).thenReturn(Optional.of(pm));
-        when(cuestionarioDao.findByPuestoIdOrderByIdAsc(1L)).thenReturn(List.of(cuestionario(4L, "PEREZ", "EN_PROCESO", EVALUACION_2)));
-
-        BusinessException e = assertThrows(BusinessException.class, () -> service.listarCandidatosEvaluados(1L));
-
-        assertEquals("No existen candidatos con cuestionarios completos para el puesto: PROJECT MANAGER TIC.", e.getMessage());
-    }
-
-    @Test
-    void reporteComparativo_requeridoVsObtenidoPorCompetencia() {
-        when(cuestionarioDao.findById(2L)).thenReturn(Optional.of(sosa()));
-        respuestasGuardadas();
-
-        ReporteComparativoDTO reporte = service.generarReporteComparativo(2L);
-
-        assertEquals("SOSA", reporte.apellido());
-        assertEquals("PUE-PM-01", reporte.puestoCodigo());
-        assertEquals(new BigDecimal("4.75"), reporte.puntajeTotal());
-        ItemComparativoDTO gestion = reporte.competencias().get(0);
-        assertEquals("GESTION DE PROYECTOS", gestion.competencia());
-        assertEquals(new BigDecimal("4.00"), gestion.requerido());
-        assertEquals(new BigDecimal("5.75"), gestion.obtenido());
-        assertEquals(new BigDecimal("1.75"), gestion.diferencia());
-        assertTrue(gestion.cumple());
-        assertEquals(new BigDecimal("0.75"), reporte.competencias().get(1).diferencia());
-    }
-
-    @Test
-    void reporteComparativo_sinPuntajeGuardado_loCalculaYMarcaLoQueNoCumple() {
-        when(cuestionarioDao.findById(3L)).thenReturn(Optional.of(gutierrez()));
-        respuestasGuardadas();
-
-        ReporteComparativoDTO reporte = service.generarReporteComparativo(3L);
-
-        assertEquals(new BigDecimal("3.25"), reporte.puntajeTotal());
-        ItemComparativoDTO lealtad = reporte.competencias().get(1);
-        assertEquals("LEALTAD", lealtad.competencia());
-        assertEquals(new BigDecimal("1.25"), lealtad.obtenido());
-        assertEquals(new BigDecimal("-1.75"), lealtad.diferencia());
-        assertFalse(lealtad.cumple());
-    }
-
-    @Test
-    void reporteComparativo_competenciaSinRespuestas_obtieneCero() {
-        when(cuestionarioDao.findById(2L)).thenReturn(Optional.of(cuestionario(2L, "SOSA", "COMPLETO", EVALUACION_1, "10", "10")));
-        respuestasGuardadas();
-
-        ReporteComparativoDTO reporte = service.generarReporteComparativo(2L);
-
-        assertEquals(new BigDecimal("0.00"), reporte.competencias().get(1).obtenido());
-        assertFalse(reporte.competencias().get(1).cumple());
-        assertEquals(new BigDecimal("10.00"), reporte.puntajeTotal(), "promedio de las competencias evaluadas");
-    }
-
-    @Test
-    void reporteComparativo_cuestionarioInexistenteONoCompleto_informa() {
-        when(cuestionarioDao.findById(4L)).thenReturn(Optional.of(cuestionario(4L, "PEREZ", "EN_PROCESO", EVALUACION_2)));
-
-        assertEquals("El candidato no tiene un cuestionario completo para el puesto",
-                assertThrows(BusinessException.class, () -> service.generarReporteComparativo(4L)).getMessage());
-        assertEquals("Cuestionario no encontrado",
-                assertThrows(BusinessException.class, () -> service.generarReporteComparativo(99L)).getMessage());
     }
 
     @Test
