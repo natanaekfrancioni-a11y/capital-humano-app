@@ -156,7 +156,7 @@ function OrdenMerito({ sesion }: { sesion: SesionConsultor }) {
   );
 }
 
-/** Pantalla 2: elegir para qué evaluación se emite el orden de mérito (o todas). */
+/** Pantalla 2: elegir para qué evaluación/es se emite el orden de mérito, o todas (CU028 paso 6 / I6). */
 function SeleccionarEvaluacion({
   datos,
   ocupado,
@@ -169,7 +169,11 @@ function SeleccionarEvaluacion({
   alAceptar: (evaluacion: string) => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  const [elegida, setElegida] = useState('TODAS');
+  const todosLosCodigos = datos.evaluaciones.map((e) => e.codigo);
+  const [elegidas, setElegidas] = useState<string[]>(todosLosCodigos);
+  const [errorSeleccion, setErrorSeleccion] = useState<string | null>(null);
+
+  const todas = todosLosCodigos.length > 0 && elegidas.length === todosLosCodigos.length;
 
   useEffect(() => {
     const d = ref.current;
@@ -177,18 +181,31 @@ function SeleccionarEvaluacion({
     return () => d?.close();
   }, []);
 
-  const opciones = [
-    {
-      valor: 'TODAS',
-      titulo: 'Todas las evaluaciones',
-      detalle: `${datos.totalCandidatos} candidatos, ${datos.totalCompletos} cuestionarios completos`,
-    },
-    ...datos.evaluaciones.map((e) => ({
-      valor: e.codigo,
-      titulo: `Evaluación ${e.codigo}`,
-      detalle: `Generada el ${fecha(e.fechaGeneracion)}, ${e.candidatos} candidatos, ${e.completos} completos`,
-    })),
-  ];
+  function alternarTodas(marcado: boolean) {
+    setErrorSeleccion(null);
+    setElegidas(marcado ? todosLosCodigos : []);
+  }
+
+  function alternarEvaluacion(codigo: string) {
+    setErrorSeleccion(null);
+    setElegidas((actuales) =>
+      actuales.includes(codigo) ? actuales.filter((c) => c !== codigo) : [...actuales, codigo],
+    );
+  }
+
+  function confirmar(e: FormEvent) {
+    e.preventDefault();
+    if (elegidas.length === 0) {
+      setErrorSeleccion('Debe seleccionar al menos una evaluación.');
+      return;
+    }
+    if (todas) {
+      alAceptar('TODAS');
+      return;
+    }
+    const ordenadas = todosLosCodigos.filter((cod) => elegidas.includes(cod));
+    alAceptar(ordenadas.join(','));
+  }
 
   return (
     <dialog
@@ -200,13 +217,7 @@ function SeleccionarEvaluacion({
       }}
       className="m-auto w-[min(94vw,34rem)] rounded-[6px] border border-linea bg-papel p-0 text-grafito shadow-[0_18px_50px_rgba(37,39,45,0.22)] backdrop:bg-grafito/45"
     >
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          alAceptar(elegida);
-        }}
-        className="px-6 pb-5 pt-5"
-      >
+      <form onSubmit={confirmar} className="px-6 pb-5 pt-5">
         <h2 id="sel-evaluacion" className="regla-doble pb-2 text-subtitulo font-extrabold">
           Seleccionar evaluación
         </h2>
@@ -217,22 +228,43 @@ function SeleccionarEvaluacion({
         <fieldset className="mt-4">
           <legend className="sr-only">Evaluaciones del puesto</legend>
           <div className="max-h-[50vh] divide-y divide-linea overflow-y-auto border-y border-linea">
-            {opciones.map((o) => (
-              <label key={o.valor} className="flex cursor-pointer items-start gap-3 px-1 py-3 hover:bg-rosa-suave">
+            <label className="flex cursor-pointer items-start gap-3 px-1 py-3 hover:bg-rosa-suave">
+              <input
+                type="checkbox"
+                className="burbuja mt-0.5"
+                checked={todas}
+                onChange={(e) => alternarTodas(e.target.checked)}
+              />
+              <span>
+                <span className="block font-bold">Todas las evaluaciones</span>
+                <span className="cifras block text-chica text-grafito-claro">
+                  {datos.totalCandidatos} candidatos, {datos.totalCompletos} cuestionarios completos
+                </span>
+              </span>
+            </label>
+
+            {datos.evaluaciones.map((e) => (
+              <label key={e.codigo} className="flex cursor-pointer items-start gap-3 px-1 py-3 hover:bg-rosa-suave">
                 <input
-                  type="radio"
-                  name="evaluacion"
+                  type="checkbox"
                   className="burbuja mt-0.5"
-                  checked={elegida === o.valor}
-                  onChange={() => setElegida(o.valor)}
+                  checked={elegidas.includes(e.codigo)}
+                  onChange={() => alternarEvaluacion(e.codigo)}
                 />
                 <span>
-                  <span className="block font-bold">{o.titulo}</span>
-                  <span className="cifras block text-chica text-grafito-claro">{o.detalle}</span>
+                  <span className="block font-bold">Evaluación {e.codigo}</span>
+                  <span className="cifras block text-chica text-grafito-claro">
+                    Generada el {fecha(e.fechaGeneracion)}, {e.candidatos} candidatos, {e.completos} completos
+                  </span>
                 </span>
               </label>
             ))}
           </div>
+          {errorSeleccion && (
+            <p role="alert" className="mt-2 text-chica font-bold text-error">
+              {errorSeleccion}
+            </p>
+          )}
         </fieldset>
         <div className="mt-6 flex justify-end gap-2.5">
           <Boton onClick={alCancelar}>Cancelar</Boton>
