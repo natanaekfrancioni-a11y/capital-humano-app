@@ -4,43 +4,51 @@ Trabajo Práctico Integrador de **Diseño de Sistemas de Información** y **Desa
 
 ## Alcance y Funcionalidades Implementadas
 
-* **Autenticación (CU001):** ingreso como consultor (usuario y contraseña) o para realizar un cuestionario (documento y clave).
-* **Preguntas (CU020 a CU023):** búsqueda, alta, modificación y baja lógica de preguntas con sus opciones de respuesta ponderadas. Las competencias, factores, opciones de respuesta, puestos y candidatos vienen cargados en `bd/seed.sql`.
-* **Evaluación y Cuestionario (CU025 y CU026):** asistente de evaluación con claves de ingreso y exportación a Excel (.xls); cuestionario por bloques con cronómetro, control de tiempo máximo, vencimiento y cantidad de accesos.
-* **Orden de mérito (CU028):** por puesto y evaluación (cumple mínimos por competencia, no alcanza mínimos y no completados), imprimible.
-* **Generar pregunta con IA (CU033):** desde el alta de pregunta, propone una pregunta nueva para un factor usando la API de Gemini.
+- **Autenticación (CU001):** ingreso como consultor (usuario y contraseña) o para realizar un cuestionario (documento y clave).
+- **Preguntas (CU020 a CU023):** búsqueda, alta, modificación y baja lógica de preguntas con sus opciones de respuesta ponderadas. Las competencias, factores, opciones de respuesta, puestos y candidatos vienen cargados en `bd/seed.sql`.
+- **Evaluación y Cuestionario (CU025 y CU026):** asistente de evaluación con claves de ingreso y exportación a Excel (.xls); cuestionario por bloques con cronómetro, control de tiempo máximo, vencimiento y cantidad de accesos.
+- **Orden de mérito (CU028):** por puesto y evaluación (cumple mínimos por competencia, no alcanza mínimos y no completados), imprimible.
+- **Generar pregunta con IA (CU033):** desde el alta de pregunta, propone una pregunta nueva para un factor usando la API de Gemini.
 
 ## Estructura del Repositorio
 
-* `/api`: Backend en Java con Spring Boot (API REST, lógica de negocio y persistencia).
-* `/frontend`: Aplicación web en Next.js.
-* `/bd`: Scripts SQL de estructura (`schema.sql`) y datos iniciales (`seed.sql`).
-* `/docs`: Documentación y diagramas UML (Clases, Entidad-Relación, Secuencia, Despliegue).
+- `/api`: Backend en Java con Spring Boot (API REST, lógica de negocio y persistencia).
+- `/frontend`: Aplicación web en Next.js.
+- `/bd`: Scripts SQL de estructura (`schema.sql`) y datos iniciales (`seed.sql`).
+- `/docs`: Documentación y diagramas UML (Clases, Entidad-Relación, Secuencia, Despliegue).
 
 ## Requisitos Previos
 
-* **Java** 21 (el `pom.xml` fija `java.version` 21)
-* **Maven** 3.8+ (o el que trae IntelliJ)
-* **Node.js** 20.9 o superior y **npm** (lo exige Next.js 16)
-* **PostgreSQL** 16
+- **Java** 21 (el `pom.xml` fija `java.version` 21)
+- **Maven** 3.8+ (o el que trae IntelliJ)
+- **Node.js** 20.9 o superior y **npm** (lo exige Next.js 16)
+- **PostgreSQL** 16
 
 ## Ejecución Local
 
 ### 1. Base de Datos (`/bd`)
 
-Creá la base y ejecutá los scripts en orden (desde la raíz del repositorio; adaptá usuario y host si corresponde):
+Asegurate de que PostgreSQL esté corriendo y creá la base junto con el esquema y los datos iniciales (desde la raíz del repositorio):
 
 ```bash
-psql -U postgres -c "CREATE DATABASE capital_humano;"
-psql -U postgres -d capital_humano -f bd/schema.sql
-psql -U postgres -d capital_humano -f bd/seed.sql
+sudo service postgresql status || sudo service postgresql start
+sudo -u postgres psql -c "DROP DATABASE IF EXISTS capital_humano;"
+sudo -u postgres psql -c "CREATE DATABASE capital_humano;"
+sudo -u postgres psql -d capital_humano -f bd/schema.sql
+sudo -u postgres psql -d capital_humano -f bd/seed.sql
+```
+
+Si te conectás directamente con `psql -U postgres` y falla por autenticación (`Peer authentication` o contraseña), podés definir la contraseña del usuario `postgres` en local (por ejemplo `postgres`):
+
+```bash
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'postgres';"
 ```
 
 `schema.sql` borra y vuelve a crear todas las tablas, así que sirve también para reiniciar los datos de prueba.
 
 ### 2. Backend (`/api`)
 
-Copiá `api/src/main/resources/application.properties.example` como `application.properties` y poné tu contraseña de PostgreSQL. Después:
+Copiá `api/src/main/resources/application.properties.example` como `application.properties` y configurá `spring.datasource.password` con la contraseña de tu usuario `postgres` (por ejemplo, si usaste `postgres` arriba, reemplazá `TU_PASSWORD` por `postgres`). Después:
 
 ```bash
 cd api
@@ -62,6 +70,17 @@ npm run dev
 ```
 
 La aplicación queda en `http://localhost:3000`. Si la API corre en otra dirección, creá `frontend/.env.local` con `NEXT_PUBLIC_API_URL=http://host:puerto`.
+
+## Pruebas unitarias y cobertura
+
+Desde `api/`:
+
+```bash
+cd api
+mvn clean test
+```
+
+Si tienen configurado JaCoCo en `pom.xml`, podés generar el reporte con `mvn test jacoco:report` y revisar el HTML en `api/target/site/jacoco/index.html`.
 
 ## Datos de prueba (seed)
 
@@ -131,7 +150,7 @@ Una **evaluación** es el grupo de cuestionarios que se generan juntos en el CU0
 
 ## Diseño del Frontend
 
-* Sistema visual "hoja de respuestas": tinta rosada de formulario sobre papel blanco y marcas en grafito. Los colores y la escala tipográfica están en `frontend/src/app/globals.css`.
-* Componentes compartidos en `frontend/src/components/ui` (hoja, grilla con círculo de selección, campos, botones, diálogos de los cuatro tipos de mensaje) y llamadas a la API en `frontend/src/lib/api.ts`.
-* Tipografía Atkinson Hyperlegible Next (licencia SIL OFL, incluida en `frontend/src/fonts`), servida localmente.
-* Requerimientos especiales: el texto se ingresa siempre en mayúsculas, Shift+Tab retrocede un campo, Enter equivale al clic y las altas muestran los errores sin tapar campos ni botones.
+- Sistema visual "hoja de respuestas": tinta rosada de formulario sobre papel blanco y marcas en grafito. Los colores y la escala tipográfica están en `frontend/src/app/globals.css`.
+- Componentes compartidos en `frontend/src/components/ui` (hoja, grilla con círculo de selección, campos, botones, diálogos de los cuatro tipos de mensaje) y llamadas a la API en `frontend/src/lib/api.ts`.
+- Tipografía Atkinson Hyperlegible Next (licencia SIL OFL, incluida en `frontend/src/fonts`), servida localmente.
+- Requerimientos especiales: el texto se ingresa siempre en mayúsculas, Shift+Tab retrocede un campo, Enter equivale al clic y las altas muestran los errores sin tapar campos ni botones.
