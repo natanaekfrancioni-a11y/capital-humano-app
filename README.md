@@ -99,7 +99,7 @@ Desde el alta de pregunta se puede invocar a la API de Gemini enviando competenc
 
 1. Generá una API key en Google AI Studio (plan gratuito, sin facturación).
 
-2. Agregá en `api/src/main/resources/application.properties` (no se sube al repo):
+2. Agregá en `api/src/main/resources/application.properties`:
 
 ```
 gemini.api.key=TU_CLAVE
