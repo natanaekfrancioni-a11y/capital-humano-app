@@ -6,9 +6,9 @@ import java.util.List;
 import java.util.Optional;
 
 public interface EvaluacionDao extends JpaRepository<Evaluacion, Long> {
-    /** CU028: evaluaciones del puesto en orden (EVA-001, EVA-002, ...). */
+    /** CU028: evaluaciones del puesto en orden (EVA-001, EVA-002, ...) */
     List<Evaluacion> findByPuestoIdOrderByNroEvaluacionAsc(Long puestoId);
 
-    /** CU025: la última evaluación del puesto, para numerar la siguiente. */
+    /** CU025: última evaluación del puesto, para numerar la siguiente */
     Optional<Evaluacion> findFirstByPuestoIdOrderByNroEvaluacionDesc(Long puestoId);
 }

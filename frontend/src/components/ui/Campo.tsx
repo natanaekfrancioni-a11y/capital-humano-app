@@ -22,7 +22,7 @@ interface Marco {
   obligatorio?: boolean;
   error?: string | null;
   ayuda?: ReactNode;
-  /** Longitud máxima a mostrar como contador. No bloquea la escritura: se valida al aceptar (2.B). */
+  /** largo máximo para el contador, no bloquea la escritura porque se valida al aceptar */
   maximo?: number;
   largo?: number;
   className?: string;
@@ -68,7 +68,7 @@ function MarcoCampo({
   );
 }
 
-/** Pasa a mayúsculas sin mover el cursor: el ingreso de texto es SIEMPRE en mayúsculas. */
+/** pasa a mayúsculas sin mover el cursor, el texto se ingresa siempre en mayúsculas */
 function aMayusculas(e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>): string {
   const el = e.target;
   const mayus = el.value.toLocaleUpperCase('es-AR');
@@ -231,7 +231,7 @@ export function CampoSeleccion({
 type ComboProps = Marco & {
   valor: string;
   alCambiar: (valor: string) => void;
-  /** Valores sugeridos. Se puede elegir uno o escribir parte de un nombre. */
+  /** valores sugeridos, se puede elegir uno o escribir parte de un nombre */
   opciones: string[];
   disabled?: boolean;
   maxLength?: number;
@@ -242,11 +242,7 @@ type ComboProps = Marco & {
 
 const coincide = (opcion: string, texto: string) => opcion.toLocaleUpperCase('es-AR').includes(texto);
 
-/**
- * Campo de texto con lista desplegable. La flecha muestra SIEMPRE la lista completa,
- * aunque ya haya un valor elegido; mientras se escribe, la lista se filtra por "contiene".
- * Teclado: flecha abajo abre y recorre, Enter elige, Escape cierra.
- */
+/** campo con lista desplegable: la flecha muestra la lista completa y al escribir se filtra por "contiene" */
 export function CampoCombo({
   etiqueta,
   obligatorio,
@@ -290,7 +286,7 @@ export function CampoCombo({
     if (abierto && activo >= 0) document.getElementById(`${listaId}-${activo}`)?.scrollIntoView({ block: 'nearest' });
   }, [abierto, activo, listaId]);
 
-  /** Abre la lista completa y marca el valor actual, si está en la lista. */
+  /** abre la lista completa y marca el valor actual si está en la lista */
   function abrirCompleta() {
     setFiltrar(false);
     setActivo(opciones.indexOf(valor));
@@ -319,7 +315,7 @@ export function CampoCombo({
       const paso = e.key === 'ArrowDown' ? 1 : -1;
       setActivo((a) => (a < 0 ? (paso === 1 ? 0 : visibles.length - 1) : (a + paso + visibles.length) % visibles.length));
     } else if (e.key === 'Enter') {
-      // Sin una opción marcada, Enter sigue de largo y envía el formulario (Buscar).
+      // sin una opción marcada el Enter sigue de largo y envía el formulario (Buscar)
       if (abierto && activo >= 0 && activo < visibles.length) {
         e.preventDefault();
         elegir(visibles[activo]);

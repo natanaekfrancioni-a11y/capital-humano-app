@@ -50,7 +50,7 @@ function OrdenMerito({ sesion }: { sesion: SesionConsultor }) {
     }
   }
 
-  // Paso 6 / 6.A: se piden las evaluaciones del puesto; si no tiene, se avisa y se sigue en el paso 4.
+  // se piden las evaluaciones del puesto, si no tiene se avisa y se sigue en la lista de puestos
   async function emitir() {
     if (!puesto) {
       await avisos.validacion('Selección obligatoria', 'Debe seleccionar un puesto de la lista para emitir el orden de mérito.');
@@ -156,7 +156,7 @@ function OrdenMerito({ sesion }: { sesion: SesionConsultor }) {
   );
 }
 
-/** Pantalla 2: elegir para qué evaluación/es se emite el orden de mérito, o todas (CU028 paso 6 / I6). */
+/** pantalla 2: elegir para qué evaluaciones se emite el orden de mérito, o todas (I6) */
 function SeleccionarEvaluacion({
   datos,
   ocupado,
@@ -281,7 +281,7 @@ const documento = (f: FilaOrdenMerito) => `${f.tipoDocumento} ${f.nroDocumento}`
 const apellidoNombre = (f: FilaOrdenMerito) => `${f.apellido}, ${f.nombre}`;
 const guion = (v: string | null) => (v ? fecha(v) : '-');
 
-/** Pantalla 3: reporte de orden de mérito, listo para imprimir. */
+/** pantalla 3: reporte de orden de mérito listo para imprimir */
 function Reporte({ reporte, alCerrar, alVolver }: { reporte: ReporteOrdenMerito; alCerrar: () => void; alVolver: () => void }) {
   useVolver(alVolver);
 

@@ -11,11 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.*;
 
-/**
- * GestorPreguntas: CU020 Gestionar preguntas, CU021 Dar de alta, CU022 Modificar y CU023 Dar de baja.
- * También ofrece las consultas de competencias, factores y opciones de respuesta que usan el alta y la
- * modificación de preguntas, y la lista de puestos del CU025.
- */
+/** GestorPreguntas: CU020 Gestionar preguntas, CU021 alta, CU022 modificación y CU023 baja */
 @Service
 public class CatalogoService {
 
@@ -25,7 +21,7 @@ public class CatalogoService {
     private final PreguntaDao preguntaDao;
     private final PuestoDao puestoDao;
 
-    // Baja lógica (patrón Template Method): BajaPregunta completa los pasos variables de BajaLogica.
+    // baja lógica con el patrón Template Method (BajaPregunta extiende BajaLogica)
     private final BajaLogica<Pregunta> bajaPregunta;
 
     public CatalogoService(
@@ -114,7 +110,7 @@ public class CatalogoService {
                 .filter(OpcionRespuesta::isActiva)
                 .orElseThrow(() -> new BusinessException("Opción de respuesta no encontrada"));
 
-        // CU021 2.C: la existencia se valida por nombre y por el texto de la pregunta
+        // CU021: la existencia se valida por nombre y por el texto de la pregunta
         if (preguntaDao.existsByFactorIdAndNombreIgnoreCaseAndActivaTrue(factorId, nom)) {
             throw new BusinessException("Ya se encuentra registrada una pregunta con el mismo nombre para la "
                     + "combinación de competencia y factor seleccionada.");
@@ -244,7 +240,7 @@ public class CatalogoService {
                 .toList();
     }
 
-    /** El alta de pregunta del enunciado no pide código: se arma a partir del factor (PREG-GP-01-03). */
+    /** el alta no pide código, se arma a partir del factor (PREG-GP-01-03) */
     private String generarCodigoPregunta(Factor factor) {
         String base = "PREG-" + factor.getCodigo().replaceFirst("^FAC-", "");
         if (base.length() > 26) {

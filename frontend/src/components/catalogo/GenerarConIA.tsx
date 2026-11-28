@@ -11,18 +11,14 @@ import { validar } from '@/lib/validacion';
 
 interface Props {
   competencias: Competencia[];
-  /** Competencia y factor ya elegidos en el alta, para no volver a cargarlos. */
+  /** competencia y factor ya elegidos en el alta, para no volver a cargarlos */
   competenciaInicial: string;
   factorInicial: string;
   alCancelar: () => void;
   alGenerar: (pregunta: PreguntaGenerada, factores: Factor[]) => void;
 }
 
-/**
- * CU033 - Generar pregunta con IA. Ventana emergente con Competencia y Factor (paso 1).
- * Al generar (pasos 2 a 4) devuelve los datos para completar el alta de pregunta (CU021).
- * Se muestra mientras está montada.
- */
+/** CU033 - Generar pregunta con IA, ventana que devuelve los datos para completar el alta (CU021) */
 export function GenerarConIA({ competencias, competenciaInicial, factorInicial, alCancelar, alGenerar }: Props) {
   const avisos = useAvisos();
   const ref = useRef<HTMLDialogElement>(null);
@@ -40,7 +36,7 @@ export function GenerarConIA({ competencias, competenciaInicial, factorInicial, 
     if (dialogo && !dialogo.open) dialogo.showModal();
   }, []);
 
-  // Al seleccionar una competencia se cargan sus factores.
+  // al elegir una competencia se cargan sus factores
   useEffect(() => {
     if (!competenciaId) return;
     let vigente = true;
@@ -64,7 +60,7 @@ export function GenerarConIA({ competencias, competenciaInicial, factorInicial, 
 
   async function generar(e: FormEvent) {
     e.preventDefault();
-    // 2.A: se detallan todas las omisiones, sin tapar campos ni botones.
+    // se muestran todos los datos que faltan, sin tapar campos ni botones
     const r = validar([
       { campo: 'Competencia', valor: competenciaId, obligatorio: true },
       { campo: 'Factor', valor: factorId, obligatorio: true },
@@ -81,7 +77,7 @@ export function GenerarConIA({ competencias, competenciaInicial, factorInicial, 
       if (!cancelado.current) alGenerar(generada, factores);
     } catch (err) {
       setGenerando(false);
-      // 4.A: mensaje emergente "Ocurrió un error al comunicarse con el servicio de IA..."
+      // si falla la IA se muestra el mensaje de error
       if (!cancelado.current) await avisos.error(err, 'No se pudo generar la pregunta');
     } finally {
       setGenerando(false);

@@ -25,32 +25,21 @@ import java.util.Locale;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 
-/**
- * CU033 - Generar pregunta con Inteligencia Artificial (extiende a CU021 - Dar de alta pregunta).
- *
- * Arma el pedido con la competencia, el factor, las preguntas que ya tiene el factor y las opciones
- * de respuesta disponibles; lo envía al servicio de IA y devuelve los datos para completar el alta.
- * Es el contexto del patrón Strategy: usa el proveedor de IA a través de la interfaz {@link ProveedorIA}.
- * No guarda nada: el consultor revisa los datos y la pregunta se registra con el "Aceptar" de CU021,
- * que hace todas las validaciones de siempre (nombre y texto repetidos, ponderaciones que suman 10).
- */
+/** CU033 - Generar pregunta con Inteligencia Artificial (extiende al CU021), no guarda nada */
 @Service
 public class GeneradorPreguntaIAService {
 
-    /** Mensaje del flujo alternativo 4.A de CU033. */
+    /** mensaje cuando falla el servicio de IA */
     public static final String MENSAJE_ERROR_IA =
             "Ocurrió un error al comunicarse con el servicio de IA. Intente nuevamente más tarde";
 
     private static final Locale ES_AR = Locale.forLanguageTag("es-AR");
-    // Los mismos máximos que la pantalla de alta de pregunta.
+    // los mismos máximos que la pantalla de alta de pregunta
     private static final int MAX_NOMBRE = 100;
     private static final int MAX_PREGUNTA = 500;
     private static final int MAX_DESCRIPCION = 255;
 
-    /**
-     * Datos que completa la IA (paso 4). Las ponderaciones van por id de opción y solo vienen si
-     * son válidas (0 o positivas y suman 10); si no, quedan vacías y las carga el consultor.
-     */
+    /** datos que completa la IA, las ponderaciones van por id de opción y solo vienen si son válidas */
     public record PreguntaGeneradaDTO(
             Long competenciaId,
             Long factorId,
@@ -83,7 +72,7 @@ public class GeneradorPreguntaIAService {
     }
 
     public PreguntaGeneradaDTO generar(Long competenciaId, Long factorId) {
-        // Paso 2 y 2.A: competencia y factor son obligatorios.
+        // competencia y factor son obligatorios
         List<String> faltan = new ArrayList<>();
         if (competenciaId == null) faltan.add("La competencia es obligatoria");
         if (factorId == null) faltan.add("El factor es obligatorio");
@@ -106,14 +95,14 @@ public class GeneradorPreguntaIAService {
         }
         List<Pregunta> existentes = preguntaDao.findByFactorIdAndActivaTrueOrderByIdAsc(factor.getId());
 
-        // Paso 3: se invoca el servicio externo de IA. 4.A: si falla, se informa con el mensaje del CU.
+        // se llama al servicio de IA, si falla se avisa con el mensaje del CU
         String respuesta;
         try {
             respuesta = proveedorIA.generarJson(armarPrompt(competencia, factor, existentes, opciones), armarEsquema(opciones));
         } catch (ServicioIAException e) {
             throw new BusinessException(MENSAJE_ERROR_IA, List.of(e.getMessage()));
         }
-        // Paso 4: datos que se cargan automáticamente en la pantalla de alta.
+        // datos que se cargan solos en la pantalla de alta
         return interpretar(respuesta, competencia, factor, opciones);
     }
 
@@ -228,7 +217,7 @@ public class GeneradorPreguntaIAService {
                 ponderaciones(json.path("ponderaciones"), opcion));
     }
 
-    /** Ponderaciones por id de opción. Si faltan o no suman 10, se devuelven vacías para que las cargue el consultor. */
+    /** ponderaciones por id de opción, si faltan o no suman 10 van vacías y las carga el consultor */
     private Map<Long, BigDecimal> ponderaciones(JsonNode lista, OpcionRespuesta opcion) {
         Map<Integer, BigDecimal> porOrden = new HashMap<>();
         for (JsonNode item : lista) {
@@ -260,14 +249,14 @@ public class GeneradorPreguntaIAService {
         }
     }
 
-    /** Si el modelo envolvió el JSON en texto o en un bloque de código, se queda con el objeto. */
+    /** si el modelo mandó el JSON dentro de texto o de un bloque de código, se queda con el objeto */
     private static String recortarJson(String texto) {
         int desde = texto.indexOf('{');
         int hasta = texto.lastIndexOf('}');
         return desde >= 0 && hasta > desde ? texto.substring(desde, hasta + 1) : texto;
     }
 
-    /** El sistema guarda los textos siempre en mayúsculas. */
+    /** los textos se guardan siempre en mayúsculas */
     private static String limpiar(String texto, int maximo) {
         String limpio = texto.replaceAll("\\s+", " ").trim().toUpperCase(ES_AR);
         return limpio.length() > maximo ? limpio.substring(0, maximo).trim() : limpio;

@@ -9,14 +9,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Copia de una pregunta del catálogo, tomada al generar la evaluación (CU025). Forma el modelo congelado
- * de la evaluación: su factor, su nombre, su texto y la ponderación de cada opción de respuesta.
- *
- * <p>Los cuestionarios sortean sus preguntas entre estas copias (CU026) y la ponderación de cada respuesta
- * se toma de acá. Así, aunque después se modifique, se dé de baja o se agregue una pregunta en el
- * catálogo (CU021 a CU023), todos los cuestionarios de la evaluación siguen usando el mismo modelo.
- */
 @Entity
 @Table(name = "pregunta_evaluacion")
 public class PreguntaEvaluacion {
@@ -29,7 +21,7 @@ public class PreguntaEvaluacion {
     @JoinColumn(name = "evaluacion_id", nullable = false)
     private Evaluacion evaluacion;
 
-    /** Factor al que pertenece la pregunta (y a través de él, la competencia). */
+    /** factor de la pregunta (y por el factor, la competencia) */
     @JsonIgnore
     @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @JoinColumn(name = "factor_id", nullable = false)
@@ -41,13 +33,13 @@ public class PreguntaEvaluacion {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String enunciado;
 
-    /** Una ponderación por cada opción de respuesta de la pregunta, tal como estaba al generar la evaluación. */
+    /** una ponderación por cada opción de respuesta, como estaba al generar la evaluación */
     @JsonIgnore
     @OneToMany(mappedBy = "preguntaEvaluacion", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("id ASC")
     private List<PonderacionEvaluacion> ponderaciones = new ArrayList<>();
 
-    /** Copia la pregunta tal como está en el catálogo: factor, nombre, texto y ponderación de cada opción. */
+    /** copia la pregunta como está en el catálogo: factor, nombre, texto y ponderación de cada opción */
     public static PreguntaEvaluacion copiaDe(Pregunta pregunta) {
         PreguntaEvaluacion copia = new PreguntaEvaluacion();
         copia.setFactor(pregunta.getFactor());
@@ -67,7 +59,7 @@ public class PreguntaEvaluacion {
         ponderaciones.add(ponderacion);
     }
 
-    /** La opción elegida, si es una de las opciones de respuesta de esta pregunta. */
+    /** la opción elegida, si es una de las opciones de esta pregunta */
     public Optional<PonderacionEvaluacion> buscarOpcion(Long detalleOpcionRespuestaId) {
         return ponderaciones.stream()
                 .filter(p -> p.getDetalleOpcionRespuesta().getId().equals(detalleOpcionRespuestaId))
@@ -79,10 +71,7 @@ public class PreguntaEvaluacion {
         return factor.getCompetencia();
     }
 
-    /**
-     * Lo que ve el candidato en el CU026: las opciones de respuesta en orden, sin sus ponderaciones.
-     * Se publica como "opcionRespuesta" para que la pantalla lo lea igual que antes.
-     */
+    /** lo que ve el candidato en el CU026: las opciones en orden y sin ponderaciones */
     @JsonProperty("opcionRespuesta")
     public OpcionesParaResponder getOpcionesParaResponder() {
         return new OpcionesParaResponder(ponderaciones.stream()

@@ -1,6 +1,4 @@
--- ============================================================================
--- Capit@l Humano - Esquema de Base de Datos (PostgreSQL)
--- ============================================================================
+-- esquema de la base de datos de Capit@l Humano (PostgreSQL)
 
 DROP TABLE IF EXISTS respuesta_cuestionario CASCADE;
 DROP TABLE IF EXISTS pregunta_cuestionario CASCADE;
@@ -135,8 +133,7 @@ CREATE TABLE configuracion_cuestionario (
     actualizado_en          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Evaluación generada en el CU025 para un puesto. Se numera dentro del puesto (EVA-001, EVA-002, ...)
--- y es la que se elige en el CU028.
+-- evaluación generada en el CU025 para un puesto, se numera dentro del puesto (EVA-001, EVA-002, ...)
 CREATE TABLE evaluacion (
     id              BIGSERIAL PRIMARY KEY,
     puesto_id       BIGINT       NOT NULL REFERENCES puesto(id),
@@ -145,9 +142,7 @@ CREATE TABLE evaluacion (
     CONSTRAINT uq_evaluacion_puesto_nro UNIQUE (puesto_id, nro_evaluacion)
 );
 
--- Modelo congelado de la evaluación (CU025, requerimiento especial): copia de cada pregunta que se puede
--- sortear, con la ponderación de cada opción de respuesta. Todos los cuestionarios de la evaluación se
--- arman con estas copias, aunque después cambie el catálogo de preguntas.
+-- modelo congelado de la evaluación (CU025): copia de cada pregunta que se puede sortear con sus ponderaciones
 CREATE TABLE pregunta_evaluacion (
     id             BIGSERIAL PRIMARY KEY,
     evaluacion_id  BIGINT       NOT NULL REFERENCES evaluacion(id) ON DELETE CASCADE,
@@ -181,7 +176,7 @@ CREATE TABLE cuestionario (
     puntaje_total       NUMERIC(6,2)
 );
 
--- Preguntas sorteadas para cada cuestionario (CU026): salen del modelo congelado de su evaluación.
+-- preguntas sorteadas para cada cuestionario (CU026), salen del modelo congelado de su evaluación
 CREATE TABLE pregunta_cuestionario (
     id                     BIGSERIAL PRIMARY KEY,
     cuestionario_id        BIGSERIAL NOT NULL REFERENCES cuestionario(id) ON DELETE CASCADE,

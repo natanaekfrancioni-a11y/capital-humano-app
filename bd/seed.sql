@@ -1,7 +1,5 @@
--- ============================================================================
--- Capit@l Humano - Datos Iniciales de Prueba (Seed)
--- ============================================================================
--- El archivo está en UTF-8. Se aclara para que psql en Windows no altere las tildes.
+-- datos de prueba de Capit@l Humano
+-- el archivo está en UTF-8, se aclara para que psql en Windows no rompa las tildes
 SET client_encoding = 'UTF8';
 
 INSERT INTO usuario_consultor (username, nombre_completo, activo) VALUES
@@ -18,7 +16,7 @@ INSERT INTO configuracion_cuestionario (
     'LEA ATENTAMENTE CADA PREGUNTA Y SELECCIONE UNA ÚNICA OPCIÓN. LAS PREGUNTAS SE PRESENTAN EN BLOQUES; UNA VEZ AVANZADO UN BLOQUE NO PODRÁ VOLVER A MODIFICARLO NI REVISAR SUS RESPUESTAS ANTERIORES.'
 );
 
--- Candidatos
+-- candidatos
 INSERT INTO candidato (
     nro_candidato, apellido, nombre, tipo_documento, nro_documento,
     fecha_nacimiento, genero, nacionalidad, escolaridad, email, eliminado
@@ -29,13 +27,13 @@ INSERT INTO candidato (
     ('CAND-004', 'RODRIGUEZ', 'CAMILA BELEN', 'DNI', '39222333', '1999-11-02', 'M', 'ARGENTINA', 'UNIVERSITARIO EN CURSO', 'camila.rodriguez@ejemplo.com', FALSE),
     ('CAND-005', 'MENDEZ', 'FEDERICO JUAN', 'DNI', '34555666', '1994-06-30', 'H', 'ARGENTINA', 'UNIVERSITARIO COMPLETO', 'federico.mendez@ejemplo.com', FALSE);
 
--- Competencias (las dos primeras son los ejemplos del enunciado)
+-- competencias (las dos primeras son los ejemplos del enunciado)
 INSERT INTO competencia (codigo, nombre, descripcion, tipo, activa) VALUES
     ('COMP-GP', 'GESTION DE PROYECTOS', 'CAPACIDAD PARA PLANIFICAR, EJECUTAR Y CONTROLAR PROYECTOS TIC', 'TECNICA', TRUE),
     ('COMP-LE', 'LEALTAD', 'COMPROMISO, INTEGRIDAD Y RESGUARDO DE INTERESES ORGANIZACIONALES', 'ACTITUDINAL', TRUE),
     ('COMP-AR', 'ARQUITECTURA DE SOFTWARE', 'DISEÑO DE SISTEMAS ESCALABLES, MANTENIBLES Y SEGUROS', 'TECNICA', TRUE);
 
--- Factores (2 por competencia)
+-- factores (2 por competencia)
 INSERT INTO factor (competencia_id, codigo, nombre, descripcion, nro_orden, activo)
 SELECT c.id, v.codigo, v.nombre, v.descripcion, v.nro_orden, TRUE
 FROM (
@@ -49,12 +47,7 @@ FROM (
 ) AS v(comp_codigo, codigo, nombre, descripcion, nro_orden)
 JOIN competencia c ON c.codigo = v.comp_codigo;
 
--- ----------------------------------------------------------------------------
--- Opciones de respuesta.
--- Tres son genéricas (verdadero/falso, valoración y frecuencia) y el resto son
--- propias de una pregunta, como en el ejemplo de LEALTAD del enunciado, donde
--- cada pregunta tiene sus cinco frases a) a e).
--- ----------------------------------------------------------------------------
+-- opciones de respuesta: tres genéricas y el resto propias de una pregunta (como el ejemplo de LEALTAD)
 INSERT INTO opcion_respuesta (nombre, descripcion, activa) VALUES
     ('VERDADERO-FALSO', 'RESPUESTA BINARIA: VERDADERO O FALSO', TRUE),
     ('ESCALA-VALORACION-5', 'ESCALA DE CINCO NIVELES, DE MALO A EXCELENTE', TRUE),
@@ -111,11 +104,7 @@ FROM (
 ) AS v(op_nombre, nro_orden, descripcion)
 JOIN opcion_respuesta o ON o.nombre = v.op_nombre;
 
--- ----------------------------------------------------------------------------
--- Preguntas: 3 por factor, así el sorteo de 2 preguntas por factor (CU026) da
--- cuestionarios distintos. Cada pregunta se responde con su opción de respuesta.
--- Los códigos siguen el formato que genera el sistema: PREG-<factor>-<número>.
--- ----------------------------------------------------------------------------
+-- preguntas: 3 por factor así el sorteo del CU026 da cuestionarios distintos (código PREG-<factor>-<número>)
 INSERT INTO pregunta (factor_id, opcion_respuesta_id, codigo, nombre, enunciado, descripcion, activa)
 SELECT f.id, o.id, v.codigo, v.nombre, v.enunciado, v.descripcion, TRUE
 FROM (
@@ -160,13 +149,7 @@ FROM (
 JOIN factor f ON f.codigo = v.fac_codigo
 JOIN opcion_respuesta o ON o.nombre = v.op_nombre;
 
--- ----------------------------------------------------------------------------
--- Ponderaciones: las de cada pregunta suman exactamente 10 y son 0 o positivas.
---   Preguntas de conocimiento: la opción correcta vale 10 y el resto 0.
---   Valoración y frecuencia: 0, 1, 2, 3 y 4 puntos de menor a mayor.
---   Frases de LEALTAD: más puntos a la frase que mejor expresa el factor.
--- Se identifica cada opción por su orden de visualización.
--- ----------------------------------------------------------------------------
+-- ponderaciones: cada pregunta suma 10 (la correcta vale 10, valoración y frecuencia van de 0 a 4)
 INSERT INTO ponderacion_opcion_pregunta (pregunta_id, detalle_opcion_respuesta_id, ponderacion)
 SELECT p.id, d.id, v.pond
 FROM (
@@ -193,7 +176,7 @@ FROM (
 JOIN pregunta p ON p.codigo = v.preg_codigo
 JOIN detalle_opcion_respuesta d ON d.opcion_respuesta_id = p.opcion_respuesta_id AND d.nro_orden = v.orden;
 
--- Puestos
+-- puestos
 INSERT INTO puesto (codigo, nombre, empresa, descripcion, activo) VALUES
     ('PUE-PM-01', 'PROJECT MANAGER TIC', 'TECNOLOGIA DEL SUR S.A.', 'LIDERAZGO DE PROYECTOS DE SOFTWARE Y METODOLOGIAS AGILES/TRADICIONALES', TRUE),
     ('PUE-SR-02', 'ARQUITECTO DE SOFTWARE SR', 'FINTECH LITORAL S.R.L.', 'DISEÑO DE ARQUITECTURAS DISTRIBUIDAS, APIS Y PERSISTENCIA', TRUE);
@@ -210,12 +193,7 @@ FROM (
 JOIN puesto p ON p.codigo = v.pue_codigo
 JOIN competencia c ON c.codigo = v.comp_codigo;
 
--- ----------------------------------------------------------------------------
--- Evaluación EVA-001 del puesto PUE-PM-01, generada hace 2 días (CU025).
--- Al generarla se congela el modelo: se copian las preguntas activas de los
--- factores (con al menos 2 preguntas) de cada competencia del puesto, con la
--- ponderación de cada opción. Los cuestionarios se arman con esa copia.
--- ----------------------------------------------------------------------------
+-- evaluación EVA-001 del puesto PUE-PM-01 (CU025), al generarla se copian las preguntas con sus ponderaciones
 INSERT INTO evaluacion (puesto_id, nro_evaluacion, fecha_creacion)
 SELECT id, 1, CURRENT_TIMESTAMP - INTERVAL '2 days'
 FROM puesto
@@ -236,12 +214,10 @@ FROM pregunta_evaluacion pe
 JOIN pregunta p ON p.factor_id = pe.factor_id AND p.nombre = pe.nombre
 JOIN ponderacion_opcion_pregunta pop ON pop.pregunta_id = p.id;
 
--- ----------------------------------------------------------------------------
--- Cuestionarios de la evaluación EVA-001:
---   CAND-001 PEREZ:     activo, para completarlo como candidato (clave A8K3M9P2).
---   CAND-002 SOSA:      completo. GP 5,75 / LE 3,75 -> 4,75 (alcanza los mínimos).
---   CAND-003 GUTIERREZ: completo. GP 5,25 / LE 1,25 -> 3,25 (no alcanza el de LEALTAD).
--- ----------------------------------------------------------------------------
+-- cuestionarios de la evaluación EVA-001
+--   CAND-001 PEREZ:     activo, para completarlo como candidato (clave A8K3M9P2)
+--   CAND-002 SOSA:      completo, GP 5,75 / LE 3,75 -> 4,75 (alcanza los mínimos)
+--   CAND-003 GUTIERREZ: completo, GP 5,25 / LE 1,25 -> 3,25 (no alcanza el de LEALTAD)
 INSERT INTO cuestionario (
     candidato_id, evaluacion_id, clave_acceso, estado, bloque_actual, cantidad_accesos,
     fecha_creacion, fecha_inicio, fecha_ultimo_acceso, fecha_fin, puntaje_total
@@ -268,8 +244,7 @@ JOIN candidato cand ON cand.nro_candidato = v.nro_cand
 JOIN puesto pue ON pue.codigo = v.cod_pue
 JOIN evaluacion e ON e.puesto_id = pue.id AND e.nro_evaluacion = 1;
 
--- Preguntas de los cuestionarios completos (tomadas del modelo de la evaluación): 2 por factor,
--- en bloques de 2 (preguntas_por_bloque = 2).
+-- preguntas de los cuestionarios completos (del modelo de la evaluación): 2 por factor en bloques de 2
 INSERT INTO pregunta_cuestionario (
     cuestionario_id, pregunta_evaluacion_id, nro_bloque, orden_visual, respondida
 )
@@ -290,8 +265,7 @@ JOIN cuestionario q ON q.candidato_id = cand.id AND q.estado = 'COMPLETO'
 JOIN pregunta p ON p.codigo = v.preg_codigo
 JOIN pregunta_evaluacion pe ON pe.evaluacion_id = q.evaluacion_id AND pe.factor_id = p.factor_id AND pe.nombre = p.nombre;
 
--- Respuestas elegidas, por orden de visualización de la opción. La ponderación obtenida es la del
--- modelo de la evaluación.
+-- respuestas elegidas por orden de la opción, la ponderación sale del modelo de la evaluación
 INSERT INTO respuesta_cuestionario (
     pregunta_cuestionario_id, detalle_opcion_respuesta_id, ponderacion_obtenida, respondida_en
 )

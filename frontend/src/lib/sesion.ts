@@ -3,7 +3,7 @@
 import { useMemo, useSyncExternalStore } from 'react';
 import type { SesionCandidato, SesionConsultor } from './tipos';
 
-// La sesión vive en sessionStorage: se pierde al cerrar la pestaña.
+// la sesión se guarda en sessionStorage, se pierde al cerrar la pestaña
 const CLAVE_CONSULTOR = 'capital-humano.consultor';
 const CLAVE_CANDIDATO = 'capital-humano.candidato';
 const EVENTO = 'capital-humano:sesion';
@@ -21,7 +21,7 @@ function escribir(clave: string, valor: string | null) {
     if (valor === null) window.sessionStorage.removeItem(clave);
     else window.sessionStorage.setItem(clave, valor);
   } catch {
-    // Almacenamiento no disponible (modo privado estricto): la sesión dura lo que dure la página.
+    // sin almacenamiento (modo privado estricto) la sesión dura lo que dure la página
   }
   window.dispatchEvent(new Event(EVENTO));
 }
@@ -45,7 +45,7 @@ function parsear<T>(texto: string | null | undefined): T | null | undefined {
   }
 }
 
-/** undefined mientras no se sabe (render del servidor), null si no hay sesión. */
+/** undefined mientras no se sabe (render del servidor), null si no hay sesión */
 function useSesion<T>(clave: string): T | null | undefined {
   const texto = useSyncExternalStore(
     suscribir,

@@ -116,7 +116,7 @@ class EvaluacionCuestionarioServiceTest {
         assertEquals(esperados.size(), resultado.size());
     }
 
-    // ------------------------------------------------------------------ datos de prueba
+    // datos de prueba
 
     private final Competencia gp = Datos.competencia(1L, "COMP-GP", "GESTION DE PROYECTOS");
     private final Competencia le = Datos.competencia(2L, "COMP-LE", "LEALTAD");
@@ -136,7 +136,7 @@ class EvaluacionCuestionarioServiceTest {
         return pm;
     }
 
-    /** Deja las dos competencias del puesto en condiciones de ser evaluadas (un factor con 2 preguntas cada una). */
+    /** deja las dos competencias del puesto listas para evaluar (un factor con 2 preguntas cada una) */
     private void competenciasEvaluables() {
         when(factorDao.findByCompetenciaIdAndActivoTrueOrderByNroOrdenAsc(1L)).thenReturn(List.of(planificacion));
         when(factorDao.findByCompetenciaIdAndActivoTrueOrderByNroOrdenAsc(2L)).thenReturn(List.of(comunicacion));
@@ -148,7 +148,7 @@ class EvaluacionCuestionarioServiceTest {
         return clave.matches("[A-Z0-9]{8}") && clave.matches(".*[A-Z].*") && clave.matches(".*[0-9].*");
     }
 
-    // ------------------------------------------------------------------ CU025: búsqueda y validaciones
+    // CU025: búsqueda y validaciones
 
     @Test
     void buscarCandidatos_filtraPorApellidoNombreYNroSinDistinguirMayusculas() {
@@ -171,7 +171,7 @@ class EvaluacionCuestionarioServiceTest {
         when(cuestionarioDao.findByCandidatoIdAndEstadoIn(3L, VIGENTES)).thenReturn(List.of());
         when(candidatoDao.findById(2L)).thenReturn(Optional.of(sosa));
 
-        // El 2 repetido se consulta una sola vez.
+        // el 2 repetido se consulta una sola vez
         List<Candidato> conCuestionario = service.validarCuestionariosActivos(List.of(2L, 3L, 2L));
 
         assertEquals(List.of(sosa), conCuestionario);
@@ -216,7 +216,7 @@ class EvaluacionCuestionarioServiceTest {
                 assertThrows(BusinessException.class, () -> service.obtenerCompetenciasPuesto(null)).getMessage());
     }
 
-    // ------------------------------------------------------------------ CU025: claves y cuestionarios
+    // CU025: claves y cuestionarios
 
     @Test
     void generarClaves_unaClaveAlfanumericaDistintaPorCandidato() {
@@ -301,7 +301,7 @@ class EvaluacionCuestionarioServiceTest {
         when(candidatoDao.findById(3L)).thenReturn(Optional.of(gutierrez));
         when(evaluacionDao.save(any(Evaluacion.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        // La clave de SOSA es la del paso 11 (en minúsculas); la de GUTIERREZ no es válida y se genera otra.
+        // la clave de SOSA es la que se mostró (en minúsculas), la de GUTIERREZ no es válida y se genera otra
         Map<Long, String> claves = Map.of(2L, " ab12cd34 ", 3L, "ABCDEFGH");
         List<Cuestionario> creados = service.generarEvaluaciones(List.of(2L, 3L), 1L, claves);
 
@@ -314,7 +314,7 @@ class EvaluacionCuestionarioServiceTest {
         assertEquals(1, primero.getBloqueActual());
         assertEquals(0, primero.getCantidadAccesos());
         assertTrue(esClaveValida(creados.get(1).getClaveAcceso()));
-        // A1: los dos cuestionarios son de la misma evaluación, la primera del puesto.
+        // A1: los dos cuestionarios son de la misma evaluación, la primera del puesto
         assertSame(primero.getEvaluacion(), creados.get(1).getEvaluacion());
         assertEquals("EVA-001", primero.getEvaluacion().getCodigo());
         assertEquals(primero.getEvaluacion().getFechaCreacion(), primero.getFechaCreacion());
@@ -352,10 +352,7 @@ class EvaluacionCuestionarioServiceTest {
         assertSame(pm, evaluacion.getPuesto());
     }
 
-    /**
-     * A2 (requerimiento especial del CU025): al generar la evaluación se copian las preguntas que se van a
-     * poder sortear, con su texto y sus ponderaciones. Los cambios posteriores del catálogo no la afectan.
-     */
+    /** A2: al generar la evaluación se copian las preguntas, los cambios del catálogo después no la afectan */
     @Test
     void generarEvaluaciones_congelaElModeloDeLasPreguntas() {
         Candidato sosa = Datos.candidato(2L, "CAND-002", "SOSA", "VALERIA SOFIA");
@@ -371,13 +368,12 @@ class EvaluacionCuestionarioServiceTest {
         when(evaluacionDao.save(any(Evaluacion.class))).thenAnswer(inv -> inv.getArgument(0));
 
         Evaluacion evaluacion = service.generarEvaluaciones(List.of(2L), 1L).get(0).getEvaluacion();
-        // Después de generarla se modifica el catálogo (CU022 y CU023).
+        // después de generarla se modifica el catálogo (CU022 y CU023)
         p2.setEnunciado("TEXTO MODIFICADO");
         p2.getPonderacionesPorDetalle().put(11L, new BigDecimal("0"));
         p1.setActiva(false);
 
-        // Se recorren las competencias del puesto (LEALTAD y GESTION). RIESGOS tiene una sola pregunta:
-        // no entra al modelo. Quedan 2 de COMUNICACION y 2 de PLANIFICACION.
+        // RIESGOS tiene una sola pregunta y no entra al modelo, quedan 2 de COMUNICACION y 2 de PLANIFICACION
         List<PreguntaEvaluacion> modelo = evaluacion.getPreguntas();
         assertEquals(List.of("PREGUNTA 3", "PREGUNTA 4", "PREGUNTA 1", "PREGUNTA 2"),
                 modelo.stream().map(PreguntaEvaluacion::getNombre).toList());
@@ -389,14 +385,14 @@ class EvaluacionCuestionarioServiceTest {
         assertEquals(new BigDecimal("4"), copia2.buscarOpcion(12L).orElseThrow().getPonderacion());
     }
 
-    // ------------------------------------------------------------------ CU026: inicio y sorteo
+    // CU026: inicio y sorteo
 
     @Test
     void iniciar_cuestionarioActivo_sorteaDosPreguntasPorFactorYArmaLosBloques() {
         Puesto pm = Datos.puesto(1L, "PUE-PM-01", "PROJECT MANAGER TIC", "TECNOLOGIA DEL SUR S.A.");
         Datos.exige(pm, gp, "4");
         Cuestionario q = Datos.cuestionario(10L, Datos.candidato(2L, "CAND-002", "SOSA", "VALERIA"), pm, "ACTIVO");
-        // Modelo de la evaluación: 3 preguntas de PLANIFICACION y 1 de RIESGOS.
+        // modelo de la evaluación: 3 preguntas de PLANIFICACION y 1 de RIESGOS
         Datos.copia(pregunta(1, planificacion), q.getEvaluacion());
         Datos.copia(pregunta(2, planificacion), q.getEvaluacion());
         Datos.copia(pregunta(3, planificacion), q.getEvaluacion());
@@ -411,7 +407,7 @@ class EvaluacionCuestionarioServiceTest {
         assertEquals("EN_PROCESO", q.getEstado());
         assertEquals(1, q.getCantidadAccesos());
         assertNotNull(q.getFechaInicio());
-        // RIESGOS tiene una sola pregunta: no se sortea. Con 1 pregunta por bloque quedan 2 bloques.
+        // RIESGOS tiene una sola pregunta y no se sortea, con 1 pregunta por bloque quedan 2 bloques
         List<PreguntaCuestionario> sorteadas = q.getPreguntas();
         assertEquals(2, sorteadas.size());
         for (int i = 0; i < sorteadas.size(); i++) {
@@ -423,7 +419,7 @@ class EvaluacionCuestionarioServiceTest {
             assertFalse(pq.isRespondida());
         }
         assertFalse(sorteadas.get(0).getPreguntaEvaluacion() == sorteadas.get(1).getPreguntaEvaluacion(), "no se repiten preguntas");
-        // Las preguntas salen del modelo de la evaluación: no se consulta el catálogo.
+        // las preguntas salen del modelo de la evaluación, no se consulta el catálogo
         verifyNoInteractions(factorDao, preguntaDao);
     }
 
@@ -436,7 +432,7 @@ class EvaluacionCuestionarioServiceTest {
         Pregunta p2 = pregunta(2, planificacion);
         Datos.copia(p1, q.getEvaluacion());
         Datos.copia(p2, q.getEvaluacion());
-        // Después de generar la evaluación, en el catálogo se da de baja una pregunta y se modifica la otra.
+        // después de generar la evaluación se da de baja una pregunta del catálogo y se modifica la otra
         p1.setActiva(false);
         p2.setEnunciado("TEXTO MODIFICADO");
         when(cuestionarioDao.findById(10L)).thenReturn(Optional.of(q));
@@ -479,9 +475,9 @@ class EvaluacionCuestionarioServiceTest {
         verify(cuestionarioDao, never()).save(any());
     }
 
-    // ------------------------------------------------------------------ CU026: responder bloques
+    // CU026: responder bloques
 
-    /** Cuestionario en proceso con 3 preguntas: dos de GESTION (bloques 1 y 2) y una de LEALTAD (bloque 2). */
+    /** cuestionario en proceso con 3 preguntas: dos de GESTION (bloques 1 y 2) y una de LEALTAD (bloque 2) */
     private Cuestionario cuestionarioEnProceso() {
         Cuestionario q = Datos.cuestionario(10L, null, puestoProjectManager(), "EN_PROCESO");
         Datos.item(1L, q, pregunta(1, planificacion), 1);
@@ -520,7 +516,7 @@ class EvaluacionCuestionarioServiceTest {
         List<PreguntaCuestionario> bloque2 = List.of(q.getPreguntas().get(1), q.getPreguntas().get(2));
         when(cuestionarioDao.findById(10L)).thenReturn(Optional.of(q));
         when(preguntaCuestionarioDao.findByCuestionarioIdAndNroBloqueOrderByOrdenVisualAsc(10L, 2)).thenReturn(bloque2);
-        // Un "repositorio en memoria": lo que se guarda se puede volver a leer al calcular el puntaje.
+        // repositorio en memoria, lo que se guarda se vuelve a leer al calcular el puntaje
         Map<Long, RespuestaCuestionario> guardadas = new HashMap<>();
         guardadas.put(1L, Datos.respuesta(q.getPreguntas().get(0), "10"));
         when(respuestaCuestionarioDao.findByPreguntaCuestionarioId(anyLong()))
@@ -532,24 +528,24 @@ class EvaluacionCuestionarioServiceTest {
         });
         when(cuestionarioDao.save(q)).thenReturn(q);
 
-        // Pregunta 2: VERDADERO vale 5. Pregunta 3: FALSO vale 0.
+        // pregunta 2: VERDADERO vale 5, pregunta 3: FALSO vale 0
         service.responderBloque(10L, 2, List.of(new RespuestaItemInput(2L, 11L), new RespuestaItemInput(3L, 12L)));
 
-        // PLANIFICACION: (10 + 5) / 2 = 7,5 -> GESTION 7,5. COMUNICACION: 0 / 2 = 0 -> LEALTAD 0. Total: 3,75.
+        // PLANIFICACION (10 + 5) / 2 = 7,5 -> GESTION 7,5, COMUNICACION 0 / 2 = 0 -> LEALTAD 0, total 3,75
         assertEquals("COMPLETO", q.getEstado());
         assertEquals(new BigDecimal("3.75"), q.getPuntajeTotal());
         assertNotNull(q.getFechaFin());
         assertEquals(2, q.getBloqueActual());
     }
 
-    /** A2: la ponderación sale de la copia que guardó la evaluación, no de la pregunta del catálogo. */
+    /** A2: la ponderación sale de la copia que guardó la evaluación, no de la pregunta del catálogo */
     @Test
     void responderBloque_usaLaPonderacionDelModeloAunqueSeHayaModificadoLaPregunta() {
         Cuestionario q = Datos.cuestionario(10L, null, puestoProjectManager(), "EN_PROCESO");
         Pregunta p1 = pregunta(1, planificacion);
         PreguntaCuestionario pq1 = Datos.item(1L, q, p1, 1);
         Datos.item(2L, q, pregunta(2, planificacion), 2);
-        // CU022 después de generar la evaluación: VERDADERO pasa a valer 0 y FALSO 10.
+        // CU022 después de generar la evaluación: VERDADERO pasa a valer 0 y FALSO 10
         p1.getPonderacionesPorDetalle().put(11L, new BigDecimal("0"));
         p1.getPonderacionesPorDetalle().put(12L, new BigDecimal("10"));
         when(cuestionarioDao.findById(10L)).thenReturn(Optional.of(q));
@@ -615,7 +611,7 @@ class EvaluacionCuestionarioServiceTest {
                 assertThrows(BusinessException.class, () -> service.responderBloque(10L, 1, List.of())).getMessage());
     }
 
-    // ------------------------------------------------------------------ cálculo y configuración
+    // cálculo y configuración
 
     @Test
     void calcularPuntajeTotal_sinPreguntas_esCero() {

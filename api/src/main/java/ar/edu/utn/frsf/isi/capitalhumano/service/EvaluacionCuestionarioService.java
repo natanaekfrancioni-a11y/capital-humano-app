@@ -20,7 +20,7 @@ public class EvaluacionCuestionarioService {
     private static final String CARACTERES_CLAVE = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final SecureRandom RANDOM = new SecureRandom();
 
-    /** CU026 observación (1): se sortean 2 preguntas por factor; un factor con menos no se puede evaluar. */
+    /** CU026: se sortean 2 preguntas por factor, un factor con menos no se puede evaluar */
     private static final int PREGUNTAS_POR_FACTOR = 2;
 
     private final CandidatoDao candidatoDao;
@@ -70,7 +70,7 @@ public class EvaluacionCuestionarioService {
     private static final List<String> ESTADOS_VIGENTES =
             List.of(EstadosCuestionario.ACTIVO.nombre(), EstadosCuestionario.EN_PROCESO.nombre());
 
-    /** CU025 paso 6: candidatos que ya poseen cuestionarios activos o en proceso (6.A). */
+    /** CU025: candidatos que ya tienen cuestionarios activos o en proceso */
     public List<Candidato> validarCuestionariosActivos(List<Long> candidatoIds) {
         if (candidatoIds == null || candidatoIds.isEmpty()) {
             throw new BusinessException("Se debe seleccionar uno o más candidatos");
@@ -87,10 +87,7 @@ public class EvaluacionCuestionarioService {
     public record CompetenciaPuestoDTO(
             Long competenciaId, String codigo, String nombre, BigDecimal ponderacionMinima, boolean evaluable) {}
 
-    /**
-     * CU025 paso 9: competencias del puesto con su ponderación requerida. Una competencia es
-     * evaluable si tiene al menos un factor activo con 2 o más preguntas activas (9.A).
-     */
+    /** competencias del puesto con su ponderación, se puede evaluar si tiene un factor con 2 o más preguntas */
     public List<CompetenciaPuestoDTO> obtenerCompetenciasPuesto(Long puestoId) {
         Puesto puesto = buscarPuestoActivo(puestoId);
         return puesto.getCompetencias().stream()
@@ -108,10 +105,7 @@ public class EvaluacionCuestionarioService {
             Long candidatoId, String nroCandidato, String apellido, String nombre,
             String tipoDocumento, String nroDocumento, String claveIngreso) {}
 
-    /**
-     * CU025 pasos 10-11: valida candidatos y puesto, y genera las claves de ingreso que se muestran
-     * antes de confirmar. No guarda nada: los cuestionarios se crean recién al presionar Finalizar.
-     */
+    /** valida candidatos y puesto y genera las claves de ingreso, no guarda nada hasta Finalizar */
     public List<CandidatoClaveDTO> generarClaves(List<Long> candidatoIds, Long puestoId) {
         validarSeleccion(candidatoIds, puestoId);
         validarSinCuestionariosVigentes(candidatoIds);
@@ -138,14 +132,7 @@ public class EvaluacionCuestionarioService {
         return generarEvaluaciones(candidatoIds, puestoId, null);
     }
 
-    /**
-     * CU025 paso 13 (Finalizar): genera la evaluación del puesto con un cuestionario en estado ACTIVO por
-     * candidato. Si se reciben las claves mostradas en el paso 11 se usan esas; si no, se generan.
-     *
-     * <p>Requerimiento especial del CU025: al generar la evaluación se congela el modelo (competencias,
-     * factores, preguntas y opciones de respuesta con sus ponderaciones). Todos los cuestionarios de la
-     * evaluación se arman después con ese modelo (CU026), aunque mientras tanto cambie el catálogo.
-     */
+    /** CU025: genera la evaluación con un cuestionario ACTIVO por candidato y congela el modelo de preguntas */
     @Transactional
     public List<Cuestionario> generarEvaluaciones(List<Long> candidatoIds, Long puestoId, Map<Long, String> claves) {
         validarSeleccion(candidatoIds, puestoId);
@@ -173,7 +160,7 @@ public class EvaluacionCuestionarioService {
             q.setFechaCreacion(ahora);
             evaluacion.agregarCuestionario(q);
         }
-        // Se guardan juntos la evaluación, su modelo y sus cuestionarios.
+        // se guardan juntos la evaluación, su modelo y sus cuestionarios
         return evaluacionDao.save(evaluacion).getCuestionarios();
     }
 
@@ -183,11 +170,7 @@ public class EvaluacionCuestionarioService {
                 .orElse(1);
     }
 
-    /**
-     * Copia en la evaluación las preguntas que se van a poder sortear: por cada competencia del puesto,
-     * los factores activos con al menos 2 preguntas activas, y de cada factor todas sus preguntas activas
-     * con su texto y la ponderación de cada opción de respuesta.
-     */
+    /** copia en la evaluación las preguntas que se pueden sortear (factores con 2 o más preguntas activas) */
     private void congelarModelo(Evaluacion evaluacion, Puesto puesto) {
         for (PuestoCompetencia pc : puesto.getCompetencias()) {
             for (Factor factor : factorDao.findByCompetenciaIdAndActivoTrueOrderByNroOrdenAsc(pc.getCompetencia().getId())) {
@@ -261,7 +244,7 @@ public class EvaluacionCuestionarioService {
                 .orElseThrow(() -> new BusinessException("Cuestionario no encontrado"));
 
         ConfiguracionCuestionario cfg = obtenerConfiguracion();
-        // Patrón State: el estado decide si hay que sortear las preguntas y cómo se registra el ingreso.
+        // patrón State: el estado decide si hay que sortear las preguntas y cómo se registra el ingreso
         EstadoCuestionario estado = EstadosCuestionario.de(q);
 
         if (estado.requiereSortearPreguntas()) {
@@ -273,11 +256,7 @@ public class EvaluacionCuestionarioService {
         return cuestionarioDao.save(q);
     }
 
-    /**
-     * CU026 paso 3 y observación (1): por cada factor del modelo congelado de la evaluación se toman
-     * 2 preguntas al azar; después se mezclan las de todos los factores y competencias y se agrupan en
-     * bloques del tamaño configurado. Las preguntas salen de la evaluación, no del catálogo actual.
-     */
+    /** CU026: sortea 2 preguntas por factor del modelo de la evaluación, las mezcla y arma los bloques */
     private List<PreguntaCuestionario> sortearPreguntas(Cuestionario q, int tamBloque) {
         Map<Long, List<PreguntaEvaluacion>> porFactor = new LinkedHashMap<>();
         for (PreguntaEvaluacion pe : q.getEvaluacion().getPreguntas()) {
@@ -340,7 +319,7 @@ public class EvaluacionCuestionarioService {
 
         for (PreguntaCuestionario pq : preguntasBloque) {
             Long detId = seleccionMap.get(pq.getId());
-            // La opción y su ponderación salen del modelo congelado de la evaluación (CU025, req. especial).
+            // la opción y su ponderación salen del modelo congelado de la evaluación
             PonderacionEvaluacion elegida = pq.getPreguntaEvaluacion().buscarOpcion(detId)
                     .orElseThrow(() -> new BusinessException("Opcion de respuesta invalida para la pregunta " + pq.getId()));
 
@@ -417,7 +396,7 @@ public class EvaluacionCuestionarioService {
         });
     }
 
-    /** Requerimiento especial CU025: clave aleatoria de 8 caracteres con letras y dígitos. */
+    /** clave aleatoria de 8 caracteres con letras y dígitos (requerimiento especial del CU025) */
     private String generarClaveAlfanumerica(int longitud) {
         String clave;
         do {

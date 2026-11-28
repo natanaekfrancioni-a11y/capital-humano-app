@@ -18,10 +18,7 @@ import ar.edu.utn.frsf.isi.capitalhumano.model.RespuestaCuestionario;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/**
- * Datos de prueba para los tests de la capa de servicio. Arma las entidades en memoria (sin base de
- * datos) con lo mínimo que usa cada caso de uso. No es un test: lo usan las clases *Test.
- */
+/** datos de prueba en memoria (sin base de datos) para los tests de servicio */
 public final class Datos {
 
     private Datos() {
@@ -58,7 +55,7 @@ public final class Datos {
         return f;
     }
 
-    /** Opción de respuesta con sus opciones en orden 1, 2, 3...; el id de cada opción es id * 10 + orden. */
+    /** opción de respuesta con sus opciones en orden 1, 2, 3..., el id de cada una es id * 10 + orden */
     public static OpcionRespuesta opcion(long id, String nombre, String... descripciones) {
         OpcionRespuesta op = new OpcionRespuesta();
         op.setId(id);
@@ -75,7 +72,7 @@ public final class Datos {
         return op;
     }
 
-    /** Pregunta con una ponderación por cada opción, en el mismo orden que las opciones. */
+    /** pregunta con una ponderación por cada opción, en el mismo orden que las opciones */
     public static Pregunta pregunta(long id, Factor factor, OpcionRespuesta opcion, String nombre, String... ponderaciones) {
         Pregunta p = new Pregunta();
         p.setId(id);
@@ -100,7 +97,7 @@ public final class Datos {
         return p;
     }
 
-    /** Agrega al puesto la competencia con su ponderación mínima. */
+    /** agrega al puesto la competencia con su ponderación mínima */
     public static PuestoCompetencia exige(Puesto puesto, Competencia competencia, String ponderacionMinima) {
         PuestoCompetencia pc = new PuestoCompetencia();
         pc.setId(puesto.getId() * 100 + competencia.getId());
@@ -111,7 +108,7 @@ public final class Datos {
         return pc;
     }
 
-    /** Evaluación del CU025 para el puesto, todavía sin preguntas ni cuestionarios. */
+    /** evaluación del CU025 para el puesto, todavía sin preguntas ni cuestionarios */
     public static Evaluacion evaluacion(long id, Puesto puesto, int nroEvaluacion, LocalDateTime fechaCreacion) {
         Evaluacion ev = new Evaluacion();
         ev.setId(id);
@@ -121,16 +118,13 @@ public final class Datos {
         return ev;
     }
 
-    /**
-     * Cuestionario de una evaluación nueva del puesto (EVA-001). Con puesto null queda sin evaluación,
-     * para los casos que no la usan.
-     */
+    /** cuestionario de una evaluación nueva del puesto (EVA-001), con puesto null queda sin evaluación */
     public static Cuestionario cuestionario(long id, Candidato candidato, Puesto puesto, String estado) {
         Evaluacion ev = puesto == null ? null : evaluacion(id, puesto, 1, LocalDateTime.of(2026, 11, 20, 9, 0, 0));
         return cuestionarioDe(id, candidato, ev, estado);
     }
 
-    /** Cuestionario de la evaluación indicada (se agrega a sus cuestionarios). */
+    /** cuestionario de la evaluación indicada (se agrega a sus cuestionarios) */
     public static Cuestionario cuestionarioDe(long id, Candidato candidato, Evaluacion evaluacion, String estado) {
         Cuestionario q = new Cuestionario();
         q.setId(id);
@@ -144,10 +138,7 @@ public final class Datos {
         return q;
     }
 
-    /**
-     * Copia congelada de la pregunta (la que guarda la evaluación al generarse). Usa el id de la pregunta;
-     * si se indica la evaluación, la agrega a su modelo.
-     */
+    /** copia congelada de la pregunta con su mismo id, si se pasa la evaluación la agrega a su modelo */
     public static PreguntaEvaluacion copia(Pregunta pregunta, Evaluacion evaluacion) {
         PreguntaEvaluacion pe = PreguntaEvaluacion.copiaDe(pregunta);
         pe.setId(pregunta.getId());
@@ -161,12 +152,12 @@ public final class Datos {
         return pe;
     }
 
-    /** Agrega al cuestionario la pregunta (copiada en el modelo de su evaluación), en el bloque indicado. */
+    /** agrega al cuestionario la pregunta (copiada en el modelo de su evaluación) en el bloque indicado */
     public static PreguntaCuestionario item(long id, Cuestionario cuestionario, Pregunta pregunta, int nroBloque) {
         return item(id, cuestionario, copia(pregunta, cuestionario.getEvaluacion()), nroBloque);
     }
 
-    /** Agrega al cuestionario una pregunta del modelo congelado, en el bloque indicado. */
+    /** agrega al cuestionario una pregunta del modelo congelado en el bloque indicado */
     public static PreguntaCuestionario item(long id, Cuestionario cuestionario, PreguntaEvaluacion pregunta, int nroBloque) {
         PreguntaCuestionario pq = new PreguntaCuestionario();
         pq.setId(id);

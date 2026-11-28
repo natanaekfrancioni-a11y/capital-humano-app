@@ -28,12 +28,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-/**
- * GestorReportes: CU028 (Emitir orden de mérito).
- *
- * Una evaluación es la que generó el CU025 para el puesto ({@link Evaluacion}): agrupa los cuestionarios
- * que se crearon juntos y tiene su número dentro del puesto (EVA-001, EVA-002, ...).
- */
+/** GestorReportes: CU028 - Emitir orden de mérito */
 @Service
 @Transactional(readOnly = true)
 public class ReporteService {
@@ -57,7 +52,7 @@ public class ReporteService {
         this.respuestaDao = respuestaDao;
     }
 
-    // ------------------------------------------------------------------ DTOs
+    // DTOs
 
     public record PuestoResumenDTO(
             Long id, String codigo, String nombre, String empresa,
@@ -83,12 +78,12 @@ public class ReporteService {
             List<FilaOrdenMeritoDTO> ordenMerito, List<FilaOrdenMeritoDTO> noAlcanzanMinimo,
             List<FilaOrdenMeritoDTO> restantes) {}
 
-    /** Evaluaciones elegidas en el paso 6 y cómo se muestran en el reporte ("TODAS" o sus códigos). */
+    /** evaluaciones elegidas y cómo se muestran en el reporte ("TODAS" o sus códigos) */
     private record Seleccion(List<Evaluacion> evaluaciones, String descripcion) {}
 
-    // ------------------------------------------------------------------ CU028
+    // CU028
 
-    /** CU028 pasos 2 a 4: puestos que coinciden con los criterios ("contiene"), con sus conteos. */
+    /** puestos que coinciden con la búsqueda (contiene), con sus conteos */
     public List<PuestoResumenDTO> buscarPuestos(String codigo, String nombre, String empresa) {
         String c = normalizar(codigo);
         String n = normalizar(nombre);
@@ -106,7 +101,7 @@ public class ReporteService {
                 .toList();
     }
 
-    /** CU028 paso 6: evaluaciones generadas para el puesto (6.A si no tiene ninguna). */
+    /** evaluaciones generadas para el puesto */
     public EvaluacionesPuestoDTO listarEvaluaciones(Long puestoId) {
         Puesto puesto = buscarPuesto(puestoId);
         List<Evaluacion> evaluaciones = evaluacionesDelPuesto(puesto);
@@ -125,20 +120,12 @@ public class ReporteService {
                 contarCandidatos(todos), contarCompletos(todos), dtos);
     }
 
-    /**
-     * CU028 paso 7 con una evaluación (EVA-001), varias separadas por coma (EVA-001,EVA-003) o TODAS.
-     */
+    /** recibe una evaluación (EVA-001), varias separadas por coma (EVA-001,EVA-003) o TODAS */
     public ReporteOrdenMeritoDTO emitirOrdenDeMerito(Long puestoId, String evaluacion, String emitidoPor) {
         return emitirOrdenDeMerito(puestoId, evaluacion == null ? List.of() : List.of(evaluacion), emitidoPor);
     }
 
-    /**
-     * CU028 pasos 6 y 7. El orden de mérito lo forman los candidatos con cuestionario completo que
-     * alcanzaron la ponderación mínima de CADA competencia evaluada, ordenados por puntaje. Se muestran
-     * aparte los completos que no alcanzaron los mínimos y el resto agrupado por estado.
-     *
-     * @param evaluaciones códigos de las evaluaciones elegidas; vacío o "TODAS" toma todas las del puesto.
-     */
+    /** orden de mérito: completos que alcanzan el mínimo de cada competencia, ordenados por puntaje */
     public ReporteOrdenMeritoDTO emitirOrdenDeMerito(Long puestoId, List<String> evaluaciones, String emitidoPor) {
         Puesto puesto = buscarPuesto(puestoId);
         Seleccion seleccion = seleccionarEvaluaciones(evaluacionesDelPuesto(puesto), evaluaciones);
@@ -195,12 +182,9 @@ public class ReporteService {
                 competencias, ordenMerito, noCumplen, restantes);
     }
 
-    // ------------------------------------------------------------------ cálculo de puntajes
+    // cálculo de puntajes
 
-    /**
-     * Algoritmo (3) del CU026: por cada factor se suman las ponderaciones obtenidas y se dividen
-     * por 2; el puntaje de la competencia es el promedio de sus factores evaluados.
-     */
+    /** puntaje del CU026: cada factor suma sus ponderaciones y divide por 2, la competencia promedia sus factores */
     public Map<Long, BigDecimal> puntajesPorCompetencia(Cuestionario q) {
         Map<Long, BigDecimal> sumaPorFactor = new HashMap<>();
         Map<Long, Long> competenciaDelFactor = new HashMap<>();
@@ -225,10 +209,7 @@ public class ReporteService {
         return resultado;
     }
 
-    /**
-     * Se controlan las competencias que evaluó la evaluación del cuestionario (su modelo congelado),
-     * contra la ponderación mínima que el puesto exige en cada una.
-     */
+    /** controla las competencias que evaluó la evaluación contra el mínimo que pide el puesto */
     private boolean alcanzaMinimos(Puesto puesto, Evaluacion evaluacion, Map<Long, BigDecimal> porCompetencia) {
         for (Competencia competencia : evaluacion.getCompetenciasEvaluadas()) {
             Optional<BigDecimal> minimo = puesto.getCompetencias().stream()
@@ -251,9 +232,9 @@ public class ReporteService {
                 .divide(BigDecimal.valueOf(porCompetencia.size()), 2, RoundingMode.HALF_UP);
     }
 
-    // ------------------------------------------------------------------ auxiliares
+    // auxiliares
 
-    /** Evaluaciones del puesto en orden. 6.A: si no tiene ninguna no se puede emitir el orden de mérito. */
+    /** evaluaciones del puesto en orden, si no tiene ninguna no se puede emitir el orden de mérito */
     private List<Evaluacion> evaluacionesDelPuesto(Puesto puesto) {
         List<Evaluacion> evaluaciones = evaluacionDao.findByPuestoIdOrderByNroEvaluacionAsc(puesto.getId());
         if (evaluaciones.isEmpty()) {
@@ -263,7 +244,7 @@ public class ReporteService {
         return evaluaciones;
     }
 
-    /** CU028 paso 6: "evaluación/es" por código, o la opción TODAS (también si no se elige ninguna). */
+    /** evaluaciones elegidas por código o TODAS (también si no se elige ninguna) */
     private Seleccion seleccionarEvaluaciones(List<Evaluacion> delPuesto, List<String> pedidas) {
         List<String> codigos = pedidas == null ? List.of() : pedidas.stream()
                 .filter(Objects::nonNull)

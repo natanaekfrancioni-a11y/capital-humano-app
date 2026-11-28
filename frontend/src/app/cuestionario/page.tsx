@@ -11,7 +11,7 @@ import type { Configuracion, Cuestionario, PreguntaCuestionario, SesionCandidato
 
 type Etapa = 'cargando' | 'instrucciones' | 'bloque' | 'completo';
 
-/** CU026 - Completar cuestionario (el candidato entra por el CU001). */
+/** CU026 - Completar cuestionario (el candidato entra por el CU001) */
 export default function CuestionarioPage() {
   const router = useRouter();
   const sesion = useSesionCandidato();
@@ -56,13 +56,13 @@ function CompletarCuestionario({ sesion }: { sesion: SesionCandidato }) {
       setFaltantes([]);
       setEtapa(q.estado === 'COMPLETO' ? 'completo' : 'bloque');
     } catch (e) {
-      // 1.A / 1.B / accesos superados: el sistema avisa la situación y el CU finaliza.
+      // si venció o se pasó de los accesos se avisa y termina el CU
       await avisos.error(e, 'No se puede completar el cuestionario');
       terminar();
     }
   }, [sesion.cuestionarioId, avisos, terminar]);
 
-  // Paso 1: instrucciones si el cuestionario está activo; si ya estaba en proceso, se retoma (1.C).
+  // instrucciones si el cuestionario está activo, si ya estaba en proceso se retoma
   useEffect(() => {
     let vigente = true;
     api
@@ -82,7 +82,7 @@ function CompletarCuestionario({ sesion }: { sesion: SesionCandidato }) {
     };
   }, [sesion.estado, iniciar, avisos, terminar]);
 
-  // Cronómetro: cuenta regresiva desde el inicio del cuestionario.
+  // cronómetro: cuenta regresiva desde el inicio del cuestionario
   useEffect(() => {
     if (etapa !== 'bloque') return;
     const id = window.setInterval(() => setAhora(Date.now()), 1000);
@@ -120,7 +120,7 @@ function CompletarCuestionario({ sesion }: { sesion: SesionCandidato }) {
     }
   }, [etapa, bloque]);
 
-  // Pasos 5 a 8: se valida el bloque, se guarda y se pasa al siguiente (o se finaliza).
+  // se valida el bloque, se guarda y se pasa al siguiente (o se termina)
   async function enviarBloque() {
     if (!cuestionario) return;
     const sinResponder = delBloque.filter((p) => selecciones[p.id] === undefined).map((p) => p.id);
@@ -327,7 +327,7 @@ function duracion(inicio: string | null, fin: string | null): string {
   return minutos === 1 ? '1 minuto' : `${minutos} minutos`;
 }
 
-/** Avance por bloques: un círculo por bloque, relleno en los ya enviados. */
+/** avance por bloques: un círculo por bloque, relleno en los ya enviados */
 function Progreso({ total, actual, respondidas, preguntas }: { total: number; actual: number; respondidas: number; preguntas: number }) {
   const porcentaje = preguntas ? Math.round((respondidas / preguntas) * 100) : 0;
   return (

@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 
-/** Ponderación de una opción de respuesta en la copia de la pregunta que guarda la evaluación. */
+/** ponderación de una opción de respuesta en la copia de la pregunta que guarda la evaluación */
 @Entity
 @Table(name = "ponderacion_evaluacion")
 public class PonderacionEvaluacion {

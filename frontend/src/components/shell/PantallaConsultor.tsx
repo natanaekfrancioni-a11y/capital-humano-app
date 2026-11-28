@@ -7,10 +7,7 @@ import type { SesionConsultor } from '@/lib/tipos';
 import { BarraSuperior } from './BarraSuperior';
 import { VolverProvider } from './Volver';
 
-/**
- * Marco de todas las pantallas del consultor: exige haber ingresado por el CU001
- * y agrega la barra superior. Recibe el contenido como función para darle la sesión.
- */
+/** marco de las pantallas del consultor: pide haber ingresado por el CU001 y agrega la barra de arriba */
 export function PantallaConsultor({ children }: { children: (sesion: SesionConsultor) => ReactNode }) {
   const router = useRouter();
   const sesion = useSesionConsultor();

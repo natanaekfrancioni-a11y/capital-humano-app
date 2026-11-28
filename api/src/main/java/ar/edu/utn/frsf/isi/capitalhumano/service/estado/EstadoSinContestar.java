@@ -1,6 +1,6 @@
 package ar.edu.utn.frsf.isi.capitalhumano.service.estado;
 
-/** SIN_CONTESTAR: venció el plazo para empezarlo. Es final. */
+/** SIN_CONTESTAR: venció el plazo para empezarlo, es final */
 public class EstadoSinContestar extends EstadoBase {
 
     @Override

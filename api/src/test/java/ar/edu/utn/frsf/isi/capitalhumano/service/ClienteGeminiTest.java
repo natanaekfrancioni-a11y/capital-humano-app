@@ -23,10 +23,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/**
- * Estrategia concreta de CU033 (Gemini). En lugar de internet se usa un servidor HTTP local que hace
- * de API de Gemini: así se prueba el pedido que se arma y cada respuesta posible, sin clave real.
- */
+/** estrategia de Gemini del CU033, se prueba con un servidor HTTP local en vez de la API real */
 class ClienteGeminiTest {
 
     private record Respuesta(int status, String cuerpo, long demoraMs) {}

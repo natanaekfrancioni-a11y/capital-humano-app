@@ -36,7 +36,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-/** CU028 (orden de mérito) y el cálculo de puntajes por competencia. */
+/** CU028 - Emitir orden de mérito y el cálculo de puntajes por competencia */
 @ExtendWith(MockitoExtension.class)
 class ReporteServiceTest {
 
@@ -52,7 +52,7 @@ class ReporteServiceTest {
     @InjectMocks
     private ReporteService service;
 
-    // ------------------------------------------------------------------ datos de prueba
+    // datos de prueba
 
     private static final LocalDateTime EVALUACION_1 = LocalDateTime.of(2026, 11, 20, 9, 0, 0);
     private static final LocalDateTime EVALUACION_2 = LocalDateTime.of(2026, 11, 22, 15, 30, 0);
@@ -70,7 +70,7 @@ class ReporteServiceTest {
         Datos.exige(pm, gp, "4");
     }
 
-    /** Evaluación con el modelo congelado de siempre: dos preguntas por competencia. */
+    /** evaluación con el modelo congelado de siempre: dos preguntas por competencia */
     private Evaluacion evaluacion(long id, int nro, LocalDateTime fecha) {
         Evaluacion ev = Datos.evaluacion(id, pm, nro, fecha);
         Datos.copia(Datos.pregunta(id * 1000 + 1, planificacion, escala, "PREGUNTA GP 1"), ev);
@@ -80,10 +80,7 @@ class ReporteServiceTest {
         return ev;
     }
 
-    /**
-     * Cuestionario de un candidato en la evaluación, con dos preguntas por competencia. Las ponderaciones
-     * obtenidas se dan en orden: dos de GESTION DE PROYECTOS y dos de LEALTAD.
-     */
+    /** cuestionario de un candidato con las ponderaciones en orden: dos de GESTION DE PROYECTOS y dos de LEALTAD */
     private Cuestionario cuestionario(long id, String apellido, String estado, Evaluacion ev, String... ponderaciones) {
         Cuestionario q = Datos.cuestionarioDe(id, Datos.candidato(id, "CAND-00" + id, apellido, "NOMBRE " + apellido), ev, estado);
         for (int i = 0; i < ponderaciones.length; i++) {
@@ -94,23 +91,20 @@ class ReporteServiceTest {
         return q;
     }
 
-    /** Respuestas "guardadas": el DAO devuelve las que se cargaron al armar cada cuestionario. */
+    /** respuestas guardadas: el DAO devuelve las que se cargaron al armar cada cuestionario */
     private void respuestasGuardadas() {
         when(respuestaDao.findByPreguntaCuestionarioId(anyLong()))
                 .thenAnswer(inv -> Optional.ofNullable(respuestas.get(inv.getArgument(0))));
     }
 
-    /**
-     * EVA-001: SOSA (cumple los mínimos) y GUTIERREZ (completo, no alcanza el mínimo de LEALTAD).
-     * EVA-002: un cuestionario en cada estado y BENITEZ, completo.
-     */
+    /** EVA-001 con SOSA y GUTIERREZ, EVA-002 con un cuestionario en cada estado y BENITEZ completo */
     private List<Evaluacion> evaluaciones() {
         Evaluacion eva1 = evaluacion(1L, 1, EVALUACION_1);
         // GESTION (10 + 1,5) / 2 = 5,75 ; LEALTAD (5 + 2,5) / 2 = 3,75 -> cumple los mínimos 4 y 3
         Cuestionario sosa = cuestionario(2L, "SOSA", "COMPLETO", eva1, "10", "1.5", "5", "2.5");
         sosa.setPuntajeTotal(new BigDecimal("4.75"));
         sosa.setFechaFin(EVALUACION_1.plusHours(2));
-        // GESTION (10 + 0,5) / 2 = 5,25 ; LEALTAD 2,5 / 2 = 1,25 -> no alcanza el mínimo de 3. Sin puntaje guardado.
+        // GESTION (10 + 0,5) / 2 = 5,25 ; LEALTAD 2,5 / 2 = 1,25 -> no alcanza el mínimo de 3, sin puntaje guardado
         Cuestionario gutierrez = cuestionario(3L, "GUTIERREZ", "COMPLETO", eva1, "10", "0.5", "2.5", "0");
         gutierrez.setFechaFin(EVALUACION_1.plusHours(3));
 
@@ -130,7 +124,7 @@ class ReporteServiceTest {
         return r;
     }
 
-    // ------------------------------------------------------------------ CU028
+    // CU028
 
     @Test
     void buscarPuestos_filtraPorCodigoNombreYEmpresaYCuentaCandidatos() {
@@ -151,7 +145,7 @@ class ReporteServiceTest {
         Puesto arquitecto = Datos.puesto(2L, "PUE-SR-02", "ARQUITECTO DE SOFTWARE SR", "FINTECH LITORAL S.R.L.");
         Evaluacion eva1 = evaluacion(1L, 1, EVALUACION_1);
         Cuestionario primero = cuestionario(2L, "SOSA", "COMPLETO", eva1, "10", "1.5", "5", "2.5");
-        // El mismo candidato vuelve a ser evaluado para el puesto en otra evaluación.
+        // el mismo candidato se vuelve a evaluar para el puesto en otra evaluación
         Evaluacion eva2 = evaluacion(2L, 2, EVALUACION_2);
         Datos.cuestionarioDe(9L, primero.getCandidato(), eva2, "ACTIVO");
         when(puestoDao.findByActivoTrueOrderByNombreAsc()).thenReturn(List.of(arquitecto, pm));
@@ -187,7 +181,7 @@ class ReporteServiceTest {
         assertEquals(1, evaluaciones.evaluaciones().get(1).completos());
     }
 
-    /** A1: antes se agrupaba por fecha de creación y dos evaluaciones del mismo segundo quedaban juntas. */
+    /** A1: antes se agrupaba por fecha de creación y dos evaluaciones del mismo segundo quedaban juntas */
     @Test
     void listarEvaluaciones_dosEvaluacionesGeneradasEnElMismoSegundo_noSeMezclan() {
         Evaluacion eva1 = evaluacion(1L, 1, EVALUACION_1);
@@ -234,10 +228,10 @@ class ReporteServiceTest {
         assertEquals(1, reporte.ordenMerito().get(0).posicion());
         assertEquals(2, reporte.ordenMerito().get(1).posicion());
         assertEquals(new BigDecimal("4.75"), reporte.ordenMerito().get(1).puntaje());
-        // GUTIERREZ completó pero no llegó al mínimo de LEALTAD; su puntaje se calcula: (5,25 + 1,25) / 2.
+        // GUTIERREZ completó pero no llegó al mínimo de LEALTAD, su puntaje es (5,25 + 1,25) / 2
         assertEquals(List.of("GUTIERREZ"), apellidos(reporte.noAlcanzanMinimo()));
         assertEquals(new BigDecimal("3.25"), reporte.noAlcanzanMinimo().get(0).puntaje());
-        // El resto, agrupado por estado: En proceso, Activo, Incompleto, Sin contestar.
+        // el resto agrupado por estado: en proceso, activo, incompleto, sin contestar
         assertEquals(List.of("PEREZ", "DIAZ", "ACOSTA", "ROMERO"), apellidos(reporte.restantes()));
         assertEquals("GESTION DE PROYECTOS", reporte.competencias().get(0).nombre());
         assertEquals(new BigDecimal("3"), reporte.competencias().get(1).ponderacionMinima());
@@ -285,10 +279,7 @@ class ReporteServiceTest {
         verifyNoInteractions(respuestaDao);
     }
 
-    /**
-     * A2: se controlan las competencias que evaluó la evaluación. Si después de generarla se agrega una
-     * competencia al puesto, no se le exige a quien ya fue evaluado sin ella.
-     */
+    /** A2: si después se agrega una competencia al puesto no se le exige a quien ya fue evaluado sin ella */
     @Test
     void ordenDeMerito_competenciaAgregadaAlPuestoDespuesDeLaEvaluacion_noSeExige() {
         List<Evaluacion> evaluaciones = evaluaciones();

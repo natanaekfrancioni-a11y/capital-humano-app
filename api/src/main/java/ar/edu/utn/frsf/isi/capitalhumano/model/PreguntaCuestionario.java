@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 
-/** Pregunta sorteada para un cuestionario (CU026), con su bloque y su orden en pantalla. */
+/** pregunta sorteada para un cuestionario (CU026) con su bloque y su orden en pantalla */
 @Entity
 @Table(name = "pregunta_cuestionario")
 public class PreguntaCuestionario {
@@ -17,11 +17,7 @@ public class PreguntaCuestionario {
     @JoinColumn(name = "cuestionario_id", nullable = false)
     private Cuestionario cuestionario;
 
-    /**
-     * Pregunta del modelo congelado de la evaluación (no la del catálogo): el texto y las opciones que
-     * ve el candidato, y las ponderaciones con las que se calcula el puntaje, son las del momento en que
-     * se generó la evaluación. Se publica como "pregunta" para la pantalla del cuestionario.
-     */
+    /** pregunta del modelo congelado de la evaluación, no la del catálogo */
     @JsonProperty("pregunta")
     @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @JoinColumn(name = "pregunta_evaluacion_id", nullable = false)
