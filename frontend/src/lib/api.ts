@@ -134,8 +134,8 @@ export const api = {
 
   // CU026
   configuracion: () => pedir<Configuracion>('GET', '/api/evaluaciones/configuracion'),
-  iniciarCuestionario: (cuestionarioId: number) =>
-    pedir<Cuestionario>('POST', `/api/evaluaciones/cuestionarios/${cuestionarioId}/iniciar`),
+  iniciarCuestionario: (cuestionarioId: number, clave: string) =>
+    pedir<Cuestionario>('POST', `/api/evaluaciones/cuestionarios/${cuestionarioId}/iniciar`, { cuerpo: { clave } }),
   responderBloque: (
     cuestionarioId: number,
     nroBloque: number,

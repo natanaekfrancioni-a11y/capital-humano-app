@@ -62,7 +62,7 @@ export default function IngresoPage() {
         router.replace('/inicio');
       } else {
         const sesion = await api.ingresarCandidato(tipoDocumento, nroDocumento, clave);
-        guardarSesionCandidato(sesion);
+        guardarSesionCandidato({ ...sesion, clave: clave.trim() });
         router.replace('/cuestionario');
       }
     } catch (err) {

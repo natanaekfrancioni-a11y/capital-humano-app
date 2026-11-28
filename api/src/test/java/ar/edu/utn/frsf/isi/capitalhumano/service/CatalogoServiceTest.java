@@ -184,21 +184,40 @@ class CatalogoServiceTest {
     }
 
     @Test
-    void crearPregunta_sinCodigoNiPonderaciones_generaElCodigoYRepartePartesIguales() {
+    void crearPregunta_sinCodigo_generaElSiguienteCodigoLibre() {
         when(factorDao.findById(11L)).thenReturn(Optional.of(planificacion));
         when(opcionRespuestaDao.findById(2L)).thenReturn(Optional.of(frecuencia));
         when(preguntaDao.countByFactorId(11L)).thenReturn(2L);
         when(preguntaDao.findByCodigoIgnoreCase("PREG-GP-01-03")).thenReturn(Optional.of(p3));
         when(preguntaDao.save(any(Pregunta.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Pregunta p = service.crearPregunta(11L, 2L, null, "FRECUENCIA DE REVISION", "¿CON QUÉ FRECUENCIA REVISA EL PLAN?", null, null);
+        Pregunta p = service.crearPregunta(11L, 2L, null, "FRECUENCIA DE REVISION", "¿CON QUÉ FRECUENCIA REVISA EL PLAN?", null,
+                ponderaciones(21L, "3", 22L, "3", 23L, "4"));
 
         // el 03 ya estaba tomado, se usa el siguiente libre
         assertEquals("PREG-GP-01-04", p.getCodigo());
         assertNull(p.getDescripcion());
-        assertEquals(new BigDecimal("3.33"), p.getPonderacionesPorDetalle().get(21L));
-        assertEquals(new BigDecimal("3.33"), p.getPonderacionesPorDetalle().get(22L));
-        assertEquals(new BigDecimal("3.34"), p.getPonderacionesPorDetalle().get(23L), "la última opción completa los 10 puntos");
+        assertEquals(new BigDecimal("4"), p.getPonderacionesPorDetalle().get(23L));
+    }
+
+    @Test
+    void crearPregunta_sinPonderaciones_noSePermite() {
+        when(factorDao.findById(11L)).thenReturn(Optional.of(planificacion));
+        when(opcionRespuestaDao.findById(2L)).thenReturn(Optional.of(frecuencia));
+
+        assertEquals("Las ponderaciones son obligatorias",
+                error(() -> service.crearPregunta(11L, 2L, null, "N", "E", null, null)).getMessage());
+        verify(preguntaDao, never()).save(any());
+    }
+
+    @Test
+    void crearPregunta_ponderacionesDeOtraOpcion_noSePermite() {
+        when(factorDao.findById(11L)).thenReturn(Optional.of(planificacion));
+        when(opcionRespuestaDao.findById(2L)).thenReturn(Optional.of(frecuencia));
+
+        assertEquals("Las ponderaciones deben corresponder exactamente a los ítems de la opción de respuesta elegida",
+                error(() -> service.crearPregunta(11L, 2L, null, "N", "E", null, ponderaciones(11L, "5", 12L, "5"))).getMessage());
+        verify(preguntaDao, never()).save(any());
     }
 
     @Test
@@ -292,15 +311,24 @@ class CatalogoServiceTest {
     }
 
     @Test
-    void modificarPregunta_sinOpcionNueva_conservaLaActualYReparteLasPonderaciones() {
+    void modificarPregunta_sinOpcionNueva_conservaLaActual() {
         when(preguntaDao.findById(1L)).thenReturn(Optional.of(p1));
 
-        service.modificarPregunta(1L, null, "PREGUNTA 1", "TEXTO", null, new HashMap<>());
+        service.modificarPregunta(1L, null, "PREGUNTA 1", "TEXTO", null, ponderaciones(11L, "7", 12L, "3"));
 
         assertSame(vf, p1.getOpcionRespuesta());
-        assertEquals(new BigDecimal("5.00"), p1.getPonderacionesPorDetalle().get(11L));
-        assertEquals(new BigDecimal("5.00"), p1.getPonderacionesPorDetalle().get(12L));
+        assertEquals(new BigDecimal("7"), p1.getPonderacionesPorDetalle().get(11L));
+        assertEquals(new BigDecimal("3"), p1.getPonderacionesPorDetalle().get(12L));
         verify(preguntaDao).save(p1);
+    }
+
+    @Test
+    void modificarPregunta_sinPonderaciones_noSePermite() {
+        when(preguntaDao.findById(1L)).thenReturn(Optional.of(p1));
+
+        assertEquals("Las ponderaciones son obligatorias",
+                error(() -> service.modificarPregunta(1L, null, "PREGUNTA 1", "TEXTO", null, new HashMap<>())).getMessage());
+        verify(preguntaDao, never()).save(any());
     }
 
     @Test

@@ -42,7 +42,7 @@ public class EvaluacionCuestionarioController {
         this.reporteService = reporteService;
     }
 
-    /** claves: las claves de ingreso mostradas en el paso 11 del CU025 (candidatoId -> clave). Opcional. */
+    /** clave de ingreso del candidato, se valida antes de iniciar el cuestionario (CU026) */
     public record IniciarRequest(String clave) {}
 
     /** claves: las claves de ingreso que se mostraron en el CU025 (candidatoId -> clave) */

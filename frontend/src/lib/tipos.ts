@@ -227,4 +227,6 @@ export interface SesionCandidato {
   candidatoNombre: string;
   cuestionarioId: number;
   estado: EstadoCuestionario;
+  /** clave con la que entró, se manda al iniciar el cuestionario */
+  clave?: string;
 }

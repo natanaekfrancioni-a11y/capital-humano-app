@@ -50,7 +50,7 @@ function CompletarCuestionario({ sesion }: { sesion: SesionCandidato }) {
 
   const iniciar = useCallback(async () => {
     try {
-      const q = await api.iniciarCuestionario(sesion.cuestionarioId);
+      const q = await api.iniciarCuestionario(sesion.cuestionarioId, sesion.clave ?? '');
       setCuestionario(q);
       setSelecciones({});
       setFaltantes([]);
@@ -60,7 +60,7 @@ function CompletarCuestionario({ sesion }: { sesion: SesionCandidato }) {
       await avisos.error(e, 'No se puede completar el cuestionario');
       terminar();
     }
-  }, [sesion.cuestionarioId, avisos, terminar]);
+  }, [sesion.cuestionarioId, sesion.clave, avisos, terminar]);
 
   // instrucciones si el cuestionario está activo, si ya estaba en proceso se retoma
   useEffect(() => {
