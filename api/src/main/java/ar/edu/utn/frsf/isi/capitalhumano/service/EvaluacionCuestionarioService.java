@@ -218,7 +218,16 @@ public class EvaluacionCuestionarioService {
         String c = clave.trim().toUpperCase();
         return c.matches("[A-Z0-9]{8}") && c.matches(".*[A-Z].*") && c.matches(".*[0-9].*");
     }
-
+    
+    public void validarClaveAcceso(Long cuestionarioId, String clave) {
+        boolean valida = clave != null && cuestionarioDao.findById(cuestionarioId)
+                .map(q -> q.getClaveAcceso().equalsIgnoreCase(clave.trim()))
+                .orElse(false);
+        if (!valida) {
+            throw new BusinessException("Clave de acceso incorrecta o faltante");
+        }
+    }
+    
     @Transactional
     public Cuestionario iniciarOSortearCuestionario(Long cuestionarioId) {
         Cuestionario q = cuestionarioDao.findById(cuestionarioId)

@@ -6,6 +6,7 @@ import ar.edu.utn.frsf.isi.capitalhumano.model.OpcionRespuesta;
 import ar.edu.utn.frsf.isi.capitalhumano.model.Pregunta;
 import ar.edu.utn.frsf.isi.capitalhumano.model.Puesto;
 import ar.edu.utn.frsf.isi.capitalhumano.service.CatalogoService;
+import ar.edu.utn.frsf.isi.capitalhumano.service.ValidadorConsultor;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -28,9 +29,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class CatalogoController {
 
     private final CatalogoService catalogoService;
+    private final ValidadorConsultor validadorConsultor;
 
-    public CatalogoController(CatalogoService catalogoService) {
+    public CatalogoController(CatalogoService catalogoService, ValidadorConsultor validadorConsultor) {
         this.catalogoService = catalogoService;
+        this.validadorConsultor = validadorConsultor;
     }
 
     public record CrearPreguntaRequest(
@@ -122,8 +125,8 @@ public class CatalogoController {
     @DeleteMapping("/preguntas/{id}")
     public ResponseEntity<Void> darBajaPregunta(
             @PathVariable Long id,
-            @RequestParam(defaultValue = "CONSULTOR") String usuario) {
-        catalogoService.darBajaPregunta(id, usuario);
+            @RequestParam(required = false) String usuario) {
+        catalogoService.darBajaPregunta(id, validadorConsultor.obtenerUsernameActivo(usuario));
         return ResponseEntity.noContent().build();
     }
 }

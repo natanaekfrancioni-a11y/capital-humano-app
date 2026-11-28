@@ -43,6 +43,8 @@ public class EvaluacionCuestionarioController {
     }
 
     /** claves: las claves de ingreso mostradas en el paso 11 del CU025 (candidatoId -> clave). Opcional. */
+    public record IniciarRequest(String clave) {}
+    
     public record GenerarEvaluacionesRequest(List<Long> candidatoIds, Long puestoId, Map<Long, String> claves) {}
 
     public record CandidatosRequest(List<Long> candidatoIds) {}
@@ -101,7 +103,11 @@ public class EvaluacionCuestionarioController {
     }
 
     @PostMapping("/cuestionarios/{id}/iniciar")
-    public ResponseEntity<Cuestionario> iniciarOSortear(@PathVariable Long id) {
+    public ResponseEntity<Cuestionario> iniciarOSortear(
+            @PathVariable Long id,
+            @RequestBody(required = false) IniciarRequest req) {
+        // La clave se valida antes de tocar la vigencia o el estado
+        evaluacionService.validarClaveAcceso(id, req != null ? req.clave() : null);
         vigenciaService.verificarVigencia(id, true);
         return ResponseEntity.ok(evaluacionService.iniciarOSortearCuestionario(id));
     }

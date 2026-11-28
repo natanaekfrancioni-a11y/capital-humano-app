@@ -92,9 +92,10 @@ CREATE TABLE pregunta (
     enunciado          TEXT         NOT NULL,
     descripcion        VARCHAR(255),
     activa             BOOLEAN      NOT NULL DEFAULT TRUE,
-    creado_en          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uq_pregunta_factor_nombre UNIQUE (factor_id, nombre)
+    creado_en          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE UNIQUE INDEX uq_pregunta_factor_nombre ON pregunta (factor_id, nombre) WHERE activa;
 
 CREATE TABLE ponderacion_opcion_pregunta (
     id                        BIGSERIAL PRIMARY KEY,

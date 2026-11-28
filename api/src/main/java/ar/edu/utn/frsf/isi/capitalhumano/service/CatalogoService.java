@@ -201,20 +201,15 @@ public class CatalogoService {
             throw new BusinessException("La opción de respuesta no posee ítems configurados");
         }
         if (ponderaciones == null || ponderaciones.isEmpty()) {
-            BigDecimal equitativa = BigDecimal.valueOf(10.0)
-                    .divide(BigDecimal.valueOf(op.getDetalles().size()), 2, java.math.RoundingMode.HALF_UP);
-            Map<Long, BigDecimal> mapa = new LinkedHashMap<>();
-            BigDecimal acumulado = BigDecimal.ZERO;
-            for (int i = 0; i < op.getDetalles().size(); i++) {
-                DetalleOpcionRespuesta det = op.getDetalles().get(i);
-                if (i == op.getDetalles().size() - 1) {
-                    mapa.put(det.getId(), BigDecimal.valueOf(10.00).subtract(acumulado));
-                } else {
-                    mapa.put(det.getId(), equitativa);
-                    acumulado = acumulado.add(equitativa);
-                }
-            }
-            return mapa;
+            throw new BusinessException("Las ponderaciones son obligatorias");
+        }
+        Set<Long> idsValidos = new HashSet<>();
+        for (DetalleOpcionRespuesta det : op.getDetalles()) {
+            idsValidos.add(det.getId());
+        }
+        if (!ponderaciones.keySet().equals(idsValidos)) {
+            throw new BusinessException("Las ponderaciones deben corresponder exactamente a los ítems "
+                    + "de la opción de respuesta elegida");
         }
 
         BigDecimal suma = BigDecimal.ZERO;
@@ -223,6 +218,9 @@ public class CatalogoService {
             BigDecimal val = e.getValue() == null ? BigDecimal.ZERO : e.getValue();
             if (val.compareTo(BigDecimal.ZERO) < 0) {
                 throw new BusinessException("Las ponderaciones de las opciones deben ser 0 o positivas");
+            }
+            if (val.stripTrailingZeros().scale() > 2) {
+                throw new BusinessException("Las ponderaciones admiten hasta 2 decimales");
             }
             suma = suma.add(val);
             resultado.put(e.getKey(), val);
