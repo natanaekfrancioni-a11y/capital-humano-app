@@ -1,5 +1,5 @@
-// Tipos de los JSON que devuelve la API (Spring Boot + Jackson).
-// Las fechas llegan como texto ISO sin zona horaria ("2026-11-24T21:03:57.123").
+// tipos de los JSON que devuelve la API (Spring Boot + Jackson)
+// las fechas llegan como texto ISO sin zona horaria ("2026-11-24T21:03:57.123")
 
 export type EstadoCuestionario = 'ACTIVO' | 'EN_PROCESO' | 'COMPLETO' | 'INCOMPLETO' | 'SIN_CONTESTAR';
 
@@ -60,11 +60,11 @@ export interface Pregunta {
   enunciado: string;
   descripcion: string | null;
   activa: boolean;
-  /** clave: id del ítem de la opción de respuesta; valor: ponderación */
+  /** clave: id del ítem de la opción de respuesta, valor: ponderación */
   ponderacionesPorDetalle: Record<string, number>;
 }
 
-/** CU033: datos que propone la IA para completar el alta de una pregunta. */
+/** CU033: datos que propone la IA para completar el alta de una pregunta */
 export interface PreguntaGenerada {
   competenciaId: number;
   factorId: number;
@@ -72,7 +72,7 @@ export interface PreguntaGenerada {
   enunciado: string;
   descripcion: string | null;
   opcionRespuestaId: number;
-  /** clave: id del ítem de la opción de respuesta. Vacío si la IA no propuso ponderaciones válidas. */
+  /** clave: id del ítem de la opción de respuesta, vacío si la IA no propuso ponderaciones válidas */
   ponderaciones: Record<string, number>;
 }
 
@@ -92,19 +92,34 @@ export interface Puesto {
   competencias: PuestoCompetencia[];
 }
 
+/** CU026: pregunta como la ve el candidato, es la copia que guardó la evaluación (sin ponderaciones) */
+export interface PreguntaDelCuestionario {
+  id: number;
+  nombre: string;
+  enunciado: string;
+  opcionRespuesta: { detalles: DetalleOpcion[] };
+}
+
 export interface PreguntaCuestionario {
   id: number;
-  pregunta: Pregunta;
-  factor: Factor;
-  competencia: Competencia;
+  pregunta: PreguntaDelCuestionario;
   nroBloque: number;
   ordenVisual: number;
   respondida: boolean;
 }
 
+/** CU025: evaluación a la que pertenece el cuestionario (EVA-001, EVA-002, ... dentro del puesto) */
+export interface EvaluacionDelCuestionario {
+  id: number;
+  nroEvaluacion: number;
+  codigo: string;
+  fechaCreacion: string;
+}
+
 export interface Cuestionario {
   id: number;
   candidato: Candidato;
+  evaluacion: EvaluacionDelCuestionario;
   puesto: Puesto;
   claveAcceso: string;
   estado: EstadoCuestionario;

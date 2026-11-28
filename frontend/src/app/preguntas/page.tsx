@@ -25,7 +25,7 @@ export default function PreguntasPage() {
   return <PantallaConsultor>{(sesion) => <Preguntas usuario={sesion.username} />}</PantallaConsultor>;
 }
 
-/** CU020 - Gestionar preguntas (invoca CU021, CU022 y CU023). */
+/** CU020 - Gestionar preguntas (invoca CU021, CU022 y CU023) */
 function Preguntas({ usuario }: { usuario: string }) {
   const avisos = useAvisos();
   const salir = useSalir();
@@ -260,12 +260,12 @@ function FormularioPregunta({ pregunta, competencias, opciones, alTerminar }: Fo
   const [porCampo, setPorCampo] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
   const [iaAbierta, setIaAbierta] = useState(false);
-  /** Aviso después de usar CU033: si la IA propuso ponderaciones válidas o hay que cargarlas. */
+  /** aviso después de usar el CU033: si la IA propuso ponderaciones válidas o hay que cargarlas */
   const [avisoIA, setAvisoIA] = useState<{ conPonderaciones: boolean } | null>(null);
 
   useVolver(useCallback(() => alTerminar(false), [alTerminar]));
 
-  // Al seleccionar una competencia se cargan sus factores (CU021, observaciones).
+  // al elegir una competencia se cargan sus factores (CU021)
   useEffect(() => {
     if (!esAlta || !competenciaId) return;
     let vigente = true;
@@ -298,7 +298,7 @@ function FormularioPregunta({ pregunta, competencias, opciones, alTerminar }: Fo
     setAvisoIA(null);
   }
 
-  // CU033 paso 4: se cargan los datos que devolvió el servicio de IA y se vuelve al paso 2 de CU021.
+  // CU033: se cargan los datos que devolvió la IA y se sigue con el alta del CU021
   function aplicarGenerada(g: PreguntaGenerada, factoresCompetencia: Factor[]) {
     const ponds = Object.entries(g.ponderaciones);
     setCompetenciaId(String(g.competenciaId));

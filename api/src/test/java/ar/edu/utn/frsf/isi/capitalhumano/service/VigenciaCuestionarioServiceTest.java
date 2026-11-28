@@ -21,10 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-/**
- * CU026 - controles de vigencia (1.A tiempo máximo, 1.B plazo para empezar, cantidad de accesos).
- * Lo importante: si el cuestionario venció, el nuevo estado se guarda aunque se informe el error.
- */
+/** CU026 - controles de vigencia (tiempo máximo, plazo para empezar y cantidad de accesos) */
 @ExtendWith(MockitoExtension.class)
 class VigenciaCuestionarioServiceTest {
 
@@ -38,10 +35,9 @@ class VigenciaCuestionarioServiceTest {
 
     @BeforeEach
     void crearServicio() {
-        // La configuración la da EvaluacionCuestionarioService: se usa la clase real con su DAO mockeado
-        // (los demás DAOs no intervienen en la verificación de vigencia).
+        // la configuración la da EvaluacionCuestionarioService, se usa la clase real con su DAO mockeado
         EvaluacionCuestionarioService evaluacion = new EvaluacionCuestionarioService(
-                null, null, null, null, cuestionarioDao, null, null, configuracionDao);
+                null, null, null, null, null, cuestionarioDao, null, null, configuracionDao);
         service = new VigenciaCuestionarioService(cuestionarioDao, evaluacion);
     }
 
@@ -86,7 +82,7 @@ class VigenciaCuestionarioServiceTest {
 
     @Test
     void sinConfiguracionCargada_usaLosValoresPorDefecto() {
-        // Sin fila de configuración, el plazo por defecto para empezar el cuestionario es de 30 días.
+        // sin fila de configuración el plazo por defecto para empezar es de 30 días
         Cuestionario q = guardado("ACTIVO");
         q.setFechaCreacion(LocalDateTime.now().minusDays(31));
 

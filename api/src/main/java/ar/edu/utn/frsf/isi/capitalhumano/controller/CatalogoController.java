@@ -54,14 +54,14 @@ public class CatalogoController {
             Map<Long, BigDecimal> ponderaciones
     ) {}
 
-    /** Combo de competencias del CU020 (filtro de búsqueda) y del CU021 (alta de pregunta). */
+    /** competencias del CU020 (filtro de búsqueda) y del CU021 (alta de pregunta) */
     @GetMapping("/competencias")
     public ResponseEntity<List<Competencia>> buscarCompetencias(
             @RequestParam(required = false) String nombre) {
         return ResponseEntity.ok(catalogoService.buscarCompetencias(nombre));
     }
 
-    /** Combo de factores de la competencia elegida, en el CU020 y en el CU021. */
+    /** factores de la competencia elegida, en el CU020 y en el CU021 */
     @GetMapping("/factores")
     public ResponseEntity<List<Factor>> buscarFactores(
             @RequestParam(required = false) Long competenciaId,
@@ -69,14 +69,14 @@ public class CatalogoController {
         return ResponseEntity.ok(catalogoService.buscarFactores(competenciaId, nombre));
     }
 
-    /** Opciones de respuesta para el alta y la modificación de preguntas (CU021 y CU022). */
+    /** opciones de respuesta para el alta y la modificación de preguntas (CU021 y CU022) */
     @GetMapping("/opciones-respuesta")
     public ResponseEntity<List<OpcionRespuesta>> buscarOpcionesRespuesta(
             @RequestParam(required = false) String nombre) {
         return ResponseEntity.ok(catalogoService.buscarOpcionesRespuesta(nombre));
     }
 
-    /** Puestos para elegir en el CU025 (paso 8). */
+    /** puestos para elegir en el CU025 */
     @GetMapping("/puestos")
     public ResponseEntity<List<Puesto>> buscarPuestos(
             @RequestParam(required = false) String codigo,

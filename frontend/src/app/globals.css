@@ -1,9 +1,6 @@
 @import "tailwindcss";
 
-/*
- * Capit@l Humano — sistema de diseño "hoja de respuestas".
- * Tinta rosada de formulario sobre papel blanco y marcas en grafito.
- */
+/* estilos generales de Capit@l Humano */
 @theme {
   --color-papel: #ffffff;
   --color-rosa: #f6edef;          /* fondo de página */
@@ -19,7 +16,7 @@
 
   --font-sans: var(--font-atkinson), ui-sans-serif, system-ui, sans-serif;
 
-  /* Escala tipográfica: 14 / 16 / 21 / 28 / 36 */
+  /* tamaños de letra: 14 / 16 / 21 / 28 / 36 */
   --text-chica: 0.875rem;
   --text-chica--line-height: 1.4;
   --text-cuerpo: 1rem;
@@ -45,7 +42,7 @@
     line-height: 1.5;
   }
 
-  /* Foco visible siempre en tinta, también para quien navega con teclado. */
+  /* foco visible también para quien navega con teclado */
   :focus-visible {
     outline: 2px solid var(--color-tinta);
     outline-offset: 2px;
@@ -58,25 +55,22 @@
 }
 
 @layer components {
-  /* Números alineados en columnas: DNI, puntajes, claves, fechas. */
+  /* números alineados en columnas: DNI, puntajes, claves, fechas */
   .cifras {
     font-variant-numeric: tabular-nums;
   }
 
-  /* Datos guardados en MAYÚSCULAS: un poco de aire entre letras para que se lean. */
+  /* datos en mayúsculas: un poco de espacio entre letras para que se lean */
   .dato {
     letter-spacing: 0.02em;
   }
 
-  /* Regla doble bajo el título de cada hoja, como el encabezado de un formulario impreso. */
+  /* doble línea abajo del título de cada hoja, como un formulario impreso */
   .regla-doble {
     border-bottom: 3px double var(--color-tinta);
   }
 
-  /*
-   * El círculo de la hoja de respuestas. Es un radio o checkbox real (accesible por teclado);
-   * al marcarlo se rellena de grafito. Es la única animación del sistema.
-   */
+  /* círculo de selección: es un radio o checkbox real y se rellena al marcarlo */
   .burbuja {
     appearance: none;
     -webkit-appearance: none;
@@ -119,7 +113,7 @@
     border-width: 2px;
   }
 
-  /* Barra de avance mientras se genera la pregunta con IA (CU033): respuesta a una acción del usuario. */
+  /* barra de avance mientras se genera la pregunta con IA (CU033) */
   .barra-avance {
     animation: avance 1.4s ease-in-out infinite;
   }
@@ -144,7 +138,7 @@
   }
 }
 
-/* Impresión del reporte (CU028): solo la hoja, sin barra ni botones. */
+/* impresión del reporte (CU028): solo la hoja, sin barra ni botones */
 @media print {
   html,
   body {

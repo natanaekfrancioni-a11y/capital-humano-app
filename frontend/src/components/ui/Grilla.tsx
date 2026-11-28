@@ -6,9 +6,9 @@ export interface Columna<T> {
   titulo: string;
   celda: (fila: T) => ReactNode;
   alinear?: 'izquierda' | 'derecha' | 'centro';
-  /** Datos guardados en mayúsculas (nombres, empresas): leve espaciado entre letras. */
+  /** datos en mayúsculas (nombres, empresas): un poco de espacio entre letras */
   dato?: boolean;
-  /** Números (documentos, puntajes): cifras de ancho fijo. */
+  /** números (documentos, puntajes): cifras de ancho fijo */
   cifras?: boolean;
   ancho?: string;
 }
@@ -21,29 +21,26 @@ interface Seleccion<T> {
   nombre: string;
   seleccionadas: Id[];
   alCambiar: (ids: Id[]) => void;
-  /** Texto accesible de cada círculo: "Seleccionar PEREZ, LUCAS" */
+  /** texto accesible de cada círculo: "Seleccionar PEREZ, LUCAS" */
   etiquetaFila: (fila: T) => string;
 }
 
 interface GrillaProps<T> {
-  /** Describe la grilla para lectores de pantalla. */
+  /** describe la grilla para lectores de pantalla */
   etiqueta: string;
   columnas: Columna<T>[];
   filas: T[];
   clave: (fila: T) => Id;
   seleccion?: Seleccion<T>;
   vacio?: ReactNode;
-  /** Alto máximo con encabezado fijo, ej. "22rem". */
+  /** alto máximo con encabezado fijo, por ejemplo "22rem" */
   altoMaximo?: string;
   pie?: ReactNode;
 }
 
 const ALINEAR = { izquierda: 'text-left', derecha: 'text-right', centro: 'text-center' } as const;
 
-/**
- * Grilla de resultados con el círculo de selección de la hoja de respuestas a la derecha,
- * como en los wireframes. El círculo es un radio/checkbox real: se usa con teclado.
- */
+/** grilla de resultados con el círculo de selección a la derecha, como en los wireframes */
 export function Grilla<T>({ etiqueta, columnas, filas, clave, seleccion, vacio, altoMaximo, pie }: GrillaProps<T>) {
   const seleccionadas = new Set(seleccion?.seleccionadas ?? []);
 

@@ -7,10 +7,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/**
- * Los cinco estados posibles. Como no guardan datos propios, hay una sola instancia de cada uno.
- * {@link #de(String)} traduce el texto guardado en la base al objeto estado correspondiente.
- */
+/** los cinco estados posibles, como no guardan datos hay una sola instancia de cada uno */
 public final class EstadosCuestionario {
 
     public static final EstadoCuestionario ACTIVO = new EstadoActivo();

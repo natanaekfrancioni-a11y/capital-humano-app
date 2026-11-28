@@ -9,7 +9,7 @@ import { useControlVolver } from './Volver';
 const BOTON_ICONO =
   'inline-flex h-10 w-10 items-center justify-center rounded-[4px] text-grafito hover:bg-rosa-suave';
 
-/** Barra de los wireframes: volver y recargar a la izquierda, usuario a la derecha. */
+/** barra de los wireframes: volver y recargar a la izquierda, usuario a la derecha */
 export function BarraSuperior({ usuario, alSalir, inicio = '/inicio' }: { usuario?: ReactNode; alSalir?: () => void; inicio?: string }) {
   const router = useRouter();
   const control = useControlVolver();

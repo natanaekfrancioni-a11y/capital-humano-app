@@ -5,20 +5,20 @@ import ar.edu.utn.frsf.isi.capitalhumano.model.Competencia;
 import ar.edu.utn.frsf.isi.capitalhumano.model.ConfiguracionCuestionario;
 import ar.edu.utn.frsf.isi.capitalhumano.model.Cuestionario;
 import ar.edu.utn.frsf.isi.capitalhumano.model.DetalleOpcionRespuesta;
+import ar.edu.utn.frsf.isi.capitalhumano.model.Evaluacion;
 import ar.edu.utn.frsf.isi.capitalhumano.model.Factor;
 import ar.edu.utn.frsf.isi.capitalhumano.model.OpcionRespuesta;
+import ar.edu.utn.frsf.isi.capitalhumano.model.PonderacionEvaluacion;
 import ar.edu.utn.frsf.isi.capitalhumano.model.Pregunta;
 import ar.edu.utn.frsf.isi.capitalhumano.model.PreguntaCuestionario;
+import ar.edu.utn.frsf.isi.capitalhumano.model.PreguntaEvaluacion;
 import ar.edu.utn.frsf.isi.capitalhumano.model.Puesto;
 import ar.edu.utn.frsf.isi.capitalhumano.model.PuestoCompetencia;
 import ar.edu.utn.frsf.isi.capitalhumano.model.RespuestaCuestionario;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/**
- * Datos de prueba para los tests de la capa de servicio. Arma las entidades en memoria (sin base de
- * datos) con lo mínimo que usa cada caso de uso. No es un test: lo usan las clases *Test.
- */
+/** datos de prueba en memoria (sin base de datos) para los tests de servicio */
 public final class Datos {
 
     private Datos() {
@@ -55,7 +55,7 @@ public final class Datos {
         return f;
     }
 
-    /** Opción de respuesta con sus opciones en orden 1, 2, 3...; el id de cada opción es id * 10 + orden. */
+    /** opción de respuesta con sus opciones en orden 1, 2, 3..., el id de cada una es id * 10 + orden */
     public static OpcionRespuesta opcion(long id, String nombre, String... descripciones) {
         OpcionRespuesta op = new OpcionRespuesta();
         op.setId(id);
@@ -72,7 +72,7 @@ public final class Datos {
         return op;
     }
 
-    /** Pregunta con una ponderación por cada opción, en el mismo orden que las opciones. */
+    /** pregunta con una ponderación por cada opción, en el mismo orden que las opciones */
     public static Pregunta pregunta(long id, Factor factor, OpcionRespuesta opcion, String nombre, String... ponderaciones) {
         Pregunta p = new Pregunta();
         p.setId(id);
@@ -97,7 +97,7 @@ public final class Datos {
         return p;
     }
 
-    /** Agrega al puesto la competencia con su ponderación mínima. */
+    /** agrega al puesto la competencia con su ponderación mínima */
     public static PuestoCompetencia exige(Puesto puesto, Competencia competencia, String ponderacionMinima) {
         PuestoCompetencia pc = new PuestoCompetencia();
         pc.setId(puesto.getId() * 100 + competencia.getId());
@@ -108,25 +108,61 @@ public final class Datos {
         return pc;
     }
 
+    /** evaluación del CU025 para el puesto, todavía sin preguntas ni cuestionarios */
+    public static Evaluacion evaluacion(long id, Puesto puesto, int nroEvaluacion, LocalDateTime fechaCreacion) {
+        Evaluacion ev = new Evaluacion();
+        ev.setId(id);
+        ev.setPuesto(puesto);
+        ev.setNroEvaluacion(nroEvaluacion);
+        ev.setFechaCreacion(fechaCreacion);
+        return ev;
+    }
+
+    /** cuestionario de una evaluación nueva del puesto (EVA-001), con puesto null queda sin evaluación */
     public static Cuestionario cuestionario(long id, Candidato candidato, Puesto puesto, String estado) {
+        Evaluacion ev = puesto == null ? null : evaluacion(id, puesto, 1, LocalDateTime.of(2026, 11, 20, 9, 0, 0));
+        return cuestionarioDe(id, candidato, ev, estado);
+    }
+
+    /** cuestionario de la evaluación indicada (se agrega a sus cuestionarios) */
+    public static Cuestionario cuestionarioDe(long id, Candidato candidato, Evaluacion evaluacion, String estado) {
         Cuestionario q = new Cuestionario();
         q.setId(id);
         q.setCandidato(candidato);
-        q.setPuesto(puesto);
         q.setEstado(estado);
         q.setClaveAcceso("A8K3M9P2");
-        q.setFechaCreacion(LocalDateTime.of(2026, 11, 20, 9, 0, 0));
+        q.setFechaCreacion(evaluacion == null ? LocalDateTime.of(2026, 11, 20, 9, 0, 0) : evaluacion.getFechaCreacion());
+        if (evaluacion != null) {
+            evaluacion.agregarCuestionario(q);
+        }
         return q;
     }
 
-    /** Agrega al cuestionario una pregunta sorteada, en el bloque indicado. */
+    /** copia congelada de la pregunta con su mismo id, si se pasa la evaluación la agrega a su modelo */
+    public static PreguntaEvaluacion copia(Pregunta pregunta, Evaluacion evaluacion) {
+        PreguntaEvaluacion pe = PreguntaEvaluacion.copiaDe(pregunta);
+        pe.setId(pregunta.getId());
+        long nro = 1;
+        for (PonderacionEvaluacion p : pe.getPonderaciones()) {
+            p.setId(pregunta.getId() * 100 + nro++);
+        }
+        if (evaluacion != null) {
+            evaluacion.agregarPregunta(pe);
+        }
+        return pe;
+    }
+
+    /** agrega al cuestionario la pregunta (copiada en el modelo de su evaluación) en el bloque indicado */
     public static PreguntaCuestionario item(long id, Cuestionario cuestionario, Pregunta pregunta, int nroBloque) {
+        return item(id, cuestionario, copia(pregunta, cuestionario.getEvaluacion()), nroBloque);
+    }
+
+    /** agrega al cuestionario una pregunta del modelo congelado en el bloque indicado */
+    public static PreguntaCuestionario item(long id, Cuestionario cuestionario, PreguntaEvaluacion pregunta, int nroBloque) {
         PreguntaCuestionario pq = new PreguntaCuestionario();
         pq.setId(id);
         pq.setCuestionario(cuestionario);
-        pq.setPregunta(pregunta);
-        pq.setFactor(pregunta.getFactor());
-        pq.setCompetencia(pregunta.getFactor().getCompetencia());
+        pq.setPreguntaEvaluacion(pregunta);
         pq.setNroBloque(nroBloque);
         pq.setOrdenVisual(cuestionario.getPreguntas().size() + 1);
         cuestionario.getPreguntas().add(pq);

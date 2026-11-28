@@ -21,7 +21,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-/** CU001 - Autenticar usuario (consultor y candidato). */
+/** CU001 - Autenticar usuario (consultor y candidato) */
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
@@ -51,7 +51,7 @@ class AuthServiceTest {
         return u;
     }
 
-    // ------------------------------------------------------------------ consultor
+    // consultor
 
     @Test
     void autenticarConsultor_usuarioActivo_devuelvePerfilYNombre() {
@@ -98,7 +98,7 @@ class AuthServiceTest {
         assertEquals(CONSULTOR_INVALIDO, e.getMessage());
     }
 
-    // ------------------------------------------------------------------ candidato
+    // candidato
 
     @Test
     void autenticarCandidato_conClaveDeCuestionarioVigente_devuelveCuestionario() {

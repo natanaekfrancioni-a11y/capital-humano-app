@@ -33,10 +33,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-/**
- * CU033 - Generar pregunta con IA. El proveedor de IA (patrón Strategy) se reemplaza por un mock:
- * los tests no usan internet ni necesitan una clave.
- */
+/** CU033 - Generar pregunta con IA, el proveedor de IA se reemplaza por un mock (sin internet ni clave) */
 @ExtendWith(MockitoExtension.class)
 class GeneradorPreguntaIAServiceTest {
 
@@ -67,7 +64,7 @@ class GeneradorPreguntaIAServiceTest {
         service = new GeneradorPreguntaIAService(competenciaDao, factorDao, preguntaDao, opcionRespuestaDao, proveedorIA, new ObjectMapper());
     }
 
-    /** Competencia, factor y opciones válidos; el factor ya tiene una pregunta. */
+    /** competencia, factor y opciones válidos, el factor ya tiene una pregunta */
     private void datosValidos() {
         when(competenciaDao.findById(1L)).thenReturn(Optional.of(gp));
         when(factorDao.findById(11L)).thenReturn(Optional.of(planificacion));
@@ -175,7 +172,7 @@ class GeneradorPreguntaIAServiceTest {
         assertTrue(generada.ponderaciones().isEmpty());
     }
 
-    // ------------------------------------------------------------------ 2.A: datos obligatorios y válidos
+    // datos obligatorios y válidos
 
     @Test
     void generar_sinCompetenciaNiFactor_listaLoQueFalta() {
@@ -224,7 +221,7 @@ class GeneradorPreguntaIAServiceTest {
         verifyNoInteractions(proveedorIA);
     }
 
-    // ------------------------------------------------------------------ 4.A: errores del servicio de IA
+    // errores del servicio de IA
 
     @Test
     void generar_elProveedorFalla_informaElMensajeDelCasoDeUsoConLaCausa() {

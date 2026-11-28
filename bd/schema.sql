@@ -1,10 +1,11 @@
--- ============================================================================
--- Capit@l Humano - Esquema de Base de Datos (PostgreSQL)
--- ============================================================================
+-- esquema de la base de datos de Capit@l Humano (PostgreSQL)
 
 DROP TABLE IF EXISTS respuesta_cuestionario CASCADE;
 DROP TABLE IF EXISTS pregunta_cuestionario CASCADE;
 DROP TABLE IF EXISTS cuestionario CASCADE;
+DROP TABLE IF EXISTS ponderacion_evaluacion CASCADE;
+DROP TABLE IF EXISTS pregunta_evaluacion CASCADE;
+DROP TABLE IF EXISTS evaluacion CASCADE;
 DROP TABLE IF EXISTS configuracion_cuestionario CASCADE;
 DROP TABLE IF EXISTS ponderacion_opcion_pregunta CASCADE;
 DROP TABLE IF EXISTS pregunta CASCADE;
@@ -133,10 +134,37 @@ CREATE TABLE configuracion_cuestionario (
     actualizado_en          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- evaluación generada en el CU025 para un puesto, se numera dentro del puesto (EVA-001, EVA-002, ...)
+CREATE TABLE evaluacion (
+    id              BIGSERIAL PRIMARY KEY,
+    puesto_id       BIGINT       NOT NULL REFERENCES puesto(id),
+    nro_evaluacion  INTEGER      NOT NULL CHECK (nro_evaluacion > 0),
+    fecha_creacion  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_evaluacion_puesto_nro UNIQUE (puesto_id, nro_evaluacion)
+);
+
+-- modelo congelado de la evaluación (CU025): copia de cada pregunta que se puede sortear con sus ponderaciones
+CREATE TABLE pregunta_evaluacion (
+    id             BIGSERIAL PRIMARY KEY,
+    evaluacion_id  BIGINT       NOT NULL REFERENCES evaluacion(id) ON DELETE CASCADE,
+    factor_id      BIGINT       NOT NULL REFERENCES factor(id),
+    nombre         VARCHAR(120) NOT NULL,
+    enunciado      TEXT         NOT NULL,
+    CONSTRAINT uq_pregunta_evaluacion UNIQUE (evaluacion_id, factor_id, nombre)
+);
+
+CREATE TABLE ponderacion_evaluacion (
+    id                          BIGSERIAL PRIMARY KEY,
+    pregunta_evaluacion_id      BIGINT       NOT NULL REFERENCES pregunta_evaluacion(id) ON DELETE CASCADE,
+    detalle_opcion_respuesta_id BIGINT       NOT NULL REFERENCES detalle_opcion_respuesta(id),
+    ponderacion                 NUMERIC(5,2) NOT NULL CHECK (ponderacion >= 0),
+    CONSTRAINT uq_ponderacion_evaluacion UNIQUE (pregunta_evaluacion_id, detalle_opcion_respuesta_id)
+);
+
 CREATE TABLE cuestionario (
     id                  BIGSERIAL PRIMARY KEY,
     candidato_id        BIGSERIAL NOT NULL REFERENCES candidato(id),
-    puesto_id           BIGSERIAL NOT NULL REFERENCES puesto(id),
+    evaluacion_id       BIGINT       NOT NULL REFERENCES evaluacion(id),
     clave_acceso        VARCHAR(8)   NOT NULL,
     estado              VARCHAR(20)  NOT NULL CHECK (estado IN ('ACTIVO', 'EN_PROCESO', 'COMPLETO', 'INCOMPLETO', 'SIN_CONTESTAR')),
     bloque_actual       INTEGER      NOT NULL DEFAULT 1 CHECK (bloque_actual >= 1),
@@ -149,16 +177,15 @@ CREATE TABLE cuestionario (
     puntaje_total       NUMERIC(6,2)
 );
 
+-- preguntas sorteadas para cada cuestionario (CU026), salen del modelo congelado de su evaluación
 CREATE TABLE pregunta_cuestionario (
-    id             BIGSERIAL PRIMARY KEY,
-    cuestionario_id BIGSERIAL NOT NULL REFERENCES cuestionario(id) ON DELETE CASCADE,
-    pregunta_id    BIGSERIAL NOT NULL REFERENCES pregunta(id),
-    factor_id      BIGSERIAL NOT NULL REFERENCES factor(id),
-    competencia_id BIGSERIAL NOT NULL REFERENCES competencia(id),
-    nro_bloque     INTEGER      NOT NULL CHECK (nro_bloque >= 1),
-    orden_visual   INTEGER      NOT NULL CHECK (orden_visual >= 1),
-    respondida     BOOLEAN      NOT NULL DEFAULT FALSE,
-    CONSTRAINT uq_preg_cuestionario UNIQUE (cuestionario_id, pregunta_id)
+    id                     BIGSERIAL PRIMARY KEY,
+    cuestionario_id        BIGSERIAL NOT NULL REFERENCES cuestionario(id) ON DELETE CASCADE,
+    pregunta_evaluacion_id BIGINT       NOT NULL REFERENCES pregunta_evaluacion(id),
+    nro_bloque             INTEGER      NOT NULL CHECK (nro_bloque >= 1),
+    orden_visual           INTEGER      NOT NULL CHECK (orden_visual >= 1),
+    respondida             BOOLEAN      NOT NULL DEFAULT FALSE,
+    CONSTRAINT uq_preg_cuestionario UNIQUE (cuestionario_id, pregunta_evaluacion_id)
 );
 
 CREATE TABLE respuesta_cuestionario (
@@ -179,7 +206,7 @@ CREATE TABLE auditoria_eliminacion (
     detalle         VARCHAR(255)
 );
 
-CREATE INDEX idx_cuestionario_candidato_estado ON cuestionario(candidato_id, estado);
-CREATE INDEX idx_cuestionario_puesto_estado    ON cuestionario(puesto_id, estado);
+CREATE INDEX idx_cuestionario_candidato_estado  ON cuestionario(candidato_id, estado);
+CREATE INDEX idx_cuestionario_evaluacion_estado ON cuestionario(evaluacion_id, estado);
 CREATE INDEX idx_factor_competencia            ON factor(competencia_id);
 CREATE INDEX idx_pregunta_factor               ON pregunta(factor_id);

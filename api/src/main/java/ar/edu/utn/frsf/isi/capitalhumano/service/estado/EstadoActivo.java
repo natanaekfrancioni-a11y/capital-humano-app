@@ -5,7 +5,7 @@ import ar.edu.utn.frsf.isi.capitalhumano.model.ConfiguracionCuestionario;
 import ar.edu.utn.frsf.isi.capitalhumano.model.Cuestionario;
 import java.time.LocalDateTime;
 
-/** ACTIVO: generado en CU025 y todavía no iniciado por el candidato. */
+/** ACTIVO: generado en el CU025 y todavía sin empezar */
 public class EstadoActivo extends EstadoBase {
 
     @Override
@@ -13,7 +13,7 @@ public class EstadoActivo extends EstadoBase {
         return "ACTIVO";
     }
 
-    /** CU026 1.B: si pasó el plazo para empezarlo, queda SIN_CONTESTAR. */
+    /** CU026: si pasó el plazo para empezarlo queda SIN_CONTESTAR */
     @Override
     public void verificarVigencia(Cuestionario cuestionario, ConfiguracionCuestionario configuracion,
                                   LocalDateTime ahora, boolean esNuevoIngreso) {
@@ -30,7 +30,7 @@ public class EstadoActivo extends EstadoBase {
         return true;
     }
 
-    /** Primer ingreso: el cuestionario empieza en el bloque 1 y pasa a EN_PROCESO. */
+    /** primer ingreso: empieza en el bloque 1 y pasa a EN_PROCESO */
     @Override
     public void registrarIngreso(Cuestionario cuestionario, LocalDateTime ahora) {
         pasarA(cuestionario, EstadosCuestionario.EN_PROCESO, ahora);

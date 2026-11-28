@@ -6,10 +6,7 @@ import ar.edu.utn.frsf.isi.capitalhumano.model.Cuestionario;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/**
- * Comportamiento por defecto: el de un estado final, que no admite ingresos ni respuestas.
- * Los estados ACTIVO y EN_PROCESO redefinen solo lo que les permite hacer su estado.
- */
+/** por defecto se comporta como un estado final (no admite ingresos ni respuestas) */
 abstract class EstadoBase implements EstadoCuestionario {
 
     static final String NO_DISPONIBLE = "El cuestionario no se encuentra disponible para ser completado.";
@@ -41,7 +38,7 @@ abstract class EstadoBase implements EstadoCuestionario {
         throw new BusinessException(NO_EN_PROCESO);
     }
 
-    /** Transición de estado: la registran siempre los estados, nunca los servicios. */
+    /** cambio de estado, lo hacen siempre los estados y nunca los servicios */
     protected void pasarA(Cuestionario cuestionario, EstadoCuestionario nuevoEstado, LocalDateTime ahora) {
         cuestionario.setEstado(nuevoEstado.nombre());
         cuestionario.setFechaCambioEstado(ahora);

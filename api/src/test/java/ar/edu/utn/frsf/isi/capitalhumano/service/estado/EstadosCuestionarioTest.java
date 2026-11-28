@@ -16,10 +16,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/**
- * Patrón State: cada estado del cuestionario decide qué se puede hacer y a qué estado se pasa.
- * Son objetos sin dependencias, así que se prueban directamente (sin mocks).
- */
+/** patrón State: cada estado decide qué se puede hacer y a qué estado se pasa, se prueban sin mocks */
 class EstadosCuestionarioTest {
 
     private static final LocalDateTime AHORA = LocalDateTime.of(2026, 11, 26, 10, 0);
@@ -31,7 +28,7 @@ class EstadosCuestionarioTest {
         return Datos.cuestionario(1L, null, null, estado);
     }
 
-    // ------------------------------------------------------------------ fábrica de estados
+    // fábrica de estados
 
     @Test
     void de_traduceElTextoGuardadoAlObjetoEstado() {
@@ -51,7 +48,7 @@ class EstadosCuestionarioTest {
                 assertThrows(BusinessException.class, () -> EstadosCuestionario.de((String) null)).getMessage());
     }
 
-    // ------------------------------------------------------------------ ACTIVO
+    // ACTIVO
 
     @Test
     void activo_dentroDelPlazo_noCambiaDeEstado() {
@@ -102,7 +99,7 @@ class EstadosCuestionarioTest {
                 () -> EstadosCuestionario.ACTIVO.completar(q, BigDecimal.TEN, AHORA)).getMessage());
     }
 
-    // ------------------------------------------------------------------ EN_PROCESO
+    // EN_PROCESO
 
     @Test
     void enProceso_dentroDelTiempoYDeLosAccesos_sigueVigente() {
@@ -180,7 +177,7 @@ class EstadosCuestionarioTest {
         assertEquals(AHORA, q.getFechaCambioEstado());
     }
 
-    // ------------------------------------------------------------------ estados finales
+    // estados finales
 
     @Test
     void estadosFinales_noPermitenIngresarNiResponder() {

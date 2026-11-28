@@ -11,14 +11,12 @@ const VARIANTES: Record<Variante, string> = {
 
 interface BotonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variante?: Variante;
-  /** Muestra el texto de espera y deshabilita el botón mientras dura la operación. */
+  /** muestra el texto de espera y deshabilita el botón mientras dura la operación */
   ocupado?: boolean;
   textoOcupado?: string;
 }
 
-/**
- * Botón nativo: el clic y la tecla Enter tienen el mismo efecto (requerimiento especial).
- */
+/** botón nativo: el clic y el Enter hacen lo mismo (requerimiento especial) */
 export function Boton({
   variante = 'secundario',
   ocupado = false,

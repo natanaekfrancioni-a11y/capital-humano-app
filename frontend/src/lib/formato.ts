@@ -1,6 +1,6 @@
 import type { EstadoCuestionario } from './tipos';
 
-/** Convierte el texto ISO de la API ("2026-11-24T21:03:57.123456") a Date en hora local. */
+/** convierte el texto ISO de la API ("2026-11-24T21:03:57.123456") a Date en hora local */
 export function aFecha(iso: string | null | undefined): Date | null {
   if (!iso) return null;
   const [fecha, hora = '00:00:00'] = iso.split('T');
@@ -25,13 +25,13 @@ export function fechaHora(iso: string | null | undefined): string {
   return f ? `${fecha(iso)} ${dos(f.getHours())}:${dos(f.getMinutes())}` : '-';
 }
 
-/** Número con 2 decimales y coma decimal: 5,25 */
+/** número con 2 decimales y coma decimal: 5,25 */
 export function puntaje(valor: number | null | undefined): string {
   if (valor === null || valor === undefined || Number.isNaN(valor)) return '-';
   return valor.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-/** Diferencia con signo: +2,50 / −0,50 */
+/** diferencia con signo: +2,50 / −0,50 */
 export function diferencia(valor: number): string {
   const texto = puntaje(Math.abs(valor));
   if (valor > 0) return `+${texto}`;
@@ -39,7 +39,7 @@ export function diferencia(valor: number): string {
   return texto;
 }
 
-/** Acepta coma o punto decimal. Devuelve NaN si no es un número. */
+/** acepta coma o punto decimal, devuelve NaN si no es un número */
 export function aNumero(texto: string): number {
   const limpio = texto.trim().replace(',', '.');
   if (limpio === '' || !/^-?\d+(\.\d+)?$/.test(limpio)) return Number.NaN;
@@ -63,7 +63,7 @@ export function nombreCompleto(apellido: string, nombre: string): string {
   return `${apellido}, ${nombre}`;
 }
 
-/** Lista legible: "A", "A y B", "A, B y C" */
+/** lista legible: "A", "A y B", "A, B y C" */
 export function enumerar(items: string[]): string {
   if (items.length <= 1) return items.join('');
   return `${items.slice(0, -1).join(', ')} y ${items[items.length - 1]}`;

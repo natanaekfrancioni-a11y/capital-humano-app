@@ -27,7 +27,7 @@ function EvaluarCandidatos() {
   const avisos = useAvisos();
   const [paso, setPaso] = useState(0);
 
-  // Paso 1: búsqueda y selección de candidatos
+  // búsqueda y selección de candidatos
   const [filtros, setFiltros] = useState({ nombre: '', apellido: '', nroCandidato: '' });
   const [resultados, setResultados] = useState<Candidato[] | null>(null);
   const [conVigente, setConVigente] = useState<Set<number>>(new Set());
@@ -37,13 +37,13 @@ function EvaluarCandidatos() {
   const [buscando, setBuscando] = useState(false);
   const [validando, setValidando] = useState(false);
 
-  // Paso 2: puesto
+  // elección del puesto
   const [puestos, setPuestos] = useState<Puesto[] | null>(null);
   const [puestoId, setPuestoId] = useState('');
   const [competencias, setCompetencias] = useState<CompetenciaPuesto[] | null>(null);
   const [generando, setGenerando] = useState(false);
 
-  // Paso 3: claves
+  // claves de ingreso
   const [claves, setClaves] = useState<CandidatoClave[]>([]);
   const [finalizando, setFinalizando] = useState(false);
   const [guardarAbierto, setGuardarAbierto] = useState(false);
@@ -69,7 +69,7 @@ function EvaluarCandidatos() {
     }
   }
 
-  // 4 / 4.A: agregar a la grilla "Candidatos a evaluar"
+  // agregar a la grilla "Candidatos a evaluar"
   function agregar() {
     if (marcadosResultado.length === 0) {
       avisos.validacion('Selección requerida', 'Se debe seleccionar uno o más candidatos.');
@@ -80,7 +80,7 @@ function EvaluarCandidatos() {
     setMarcadosResultado([]);
   }
 
-  // 5.A: quitar de la grilla "Candidatos a evaluar"
+  // quitar de la grilla "Candidatos a evaluar"
   function quitar() {
     if (marcadosEvaluar.length === 0) {
       avisos.validacion('Selección requerida', 'Se debe seleccionar uno o más candidatos de la lista a evaluar.');
@@ -90,7 +90,7 @@ function EvaluarCandidatos() {
     setMarcadosEvaluar([]);
   }
 
-  // 6 / 6.A: candidatos con cuestionarios activos o en proceso no pueden evaluarse
+  // los candidatos con cuestionarios activos o en proceso no se pueden evaluar
   async function siguienteACandidatos() {
     if (aEvaluar.length === 0) {
       await avisos.validacion('Selección requerida', 'Se debe agregar uno o más candidatos a la lista de candidatos a evaluar.');
@@ -118,7 +118,7 @@ function EvaluarCandidatos() {
     }
   }
 
-  // 8 / 9 / 9.A: al elegir el puesto se muestran sus competencias; si alguna no es evaluable, termina el CU.
+  // al elegir el puesto se muestran sus competencias, si alguna no se puede evaluar termina el CU
   async function elegirPuesto(id: string) {
     setPuestoId(id);
     setCompetencias(null);
@@ -141,7 +141,6 @@ function EvaluarCandidatos() {
     }
   }
 
-  // 10 / 10.A / 11
   async function siguienteAPuesto() {
     if (!puestoId) {
       await avisos.validacion('Función no seleccionada', 'Se debe seleccionar una función o puesto para realizar la evaluación.');
@@ -158,7 +157,6 @@ function EvaluarCandidatos() {
     }
   }
 
-  // 12.A
   async function cancelarEvaluacion() {
     const ok = await avisos.confirmar('Cancelar la evaluación', 'La evaluación no se guardará y las claves generadas se descartan.', {
       aceptar: 'Sí, cancelar',
@@ -167,7 +165,7 @@ function EvaluarCandidatos() {
     if (ok) irAlInicio();
   }
 
-  // 12 / 13 / 14: se guarda la evaluación y se ofrece exportar las claves.
+  // se guarda la evaluación y se ofrece exportar las claves
   async function finalizar() {
     if (!puesto) return;
     setFinalizando(true);
@@ -198,13 +196,12 @@ function EvaluarCandidatos() {
     else irAlInicio();
   }
 
-  // 16.A: cancelar en la pantalla de carpeta vuelve a preguntar si desea exportar.
+  // si cancela en la pantalla de la carpeta se vuelve a preguntar si quiere exportar
   async function cancelarGuardado() {
     setGuardarAbierto(false);
     await preguntarExportacion();
   }
 
-  // 17 / 18
   async function guardarArchivo(carpeta: ManejadorCarpeta | null, nombre: string) {
     if (!puesto) return;
     const archivo = nombre.toLowerCase().endsWith('.xls') ? nombre : `${nombre}.xls`;

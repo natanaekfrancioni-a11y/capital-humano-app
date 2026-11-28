@@ -17,12 +17,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-/**
- * Estrategia concreta de {@link ProveedorIA} (patrón Strategy): Google Gemini, API REST "generateContent".
- *
- * La clave es personal y va en application.properties (gemini.api.key), que no se sube al repositorio.
- * El modelo se puede cambiar con gemini.model sin tocar el código.
- */
+/** estrategia concreta de ProveedorIA (patrón Strategy) con la API de Google Gemini */
 @Component
 public class ClienteGemini implements ProveedorIA {
 
@@ -60,11 +55,7 @@ public class ClienteGemini implements ProveedorIA {
         return modelo;
     }
 
-    /**
-     * Pide al modelo una respuesta en JSON que cumpla el esquema y devuelve ese JSON como texto.
-     * Si la API rechaza el formato de salida estructurada (error 400), reintenta una vez sin él:
-     * el pedido también le indica en el texto que responda solo con JSON.
-     */
+    /** pide la respuesta en JSON, si la API da error 400 reintenta una vez sin la salida estructurada */
     @Override
     public String generarJson(String prompt, ObjectNode esquema) {
         if (clave.isEmpty()) {
@@ -157,7 +148,7 @@ public class ClienteGemini implements ProveedorIA {
         return "El servicio de IA rechazó el pedido (código " + status + ": " + resumir(detalle) + ").";
     }
 
-    /** Junta el texto de la primera respuesta del modelo, sin las partes de razonamiento interno. */
+    /** junta el texto de la primera respuesta del modelo sin las partes de razonamiento */
     private String extraerTexto(JsonNode json) {
         JsonNode candidato = json.path("candidates").path(0);
         StringBuilder texto = new StringBuilder();

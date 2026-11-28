@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** CU001 - Autenticar usuario: consultor (usuario y contraseña) o candidato (documento y clave). */
+/** CU001 - Autenticar usuario: consultor (usuario y contraseña) o candidato (documento y clave) */
 @RestController
 @RequestMapping("/api/auth")
 @CrossOrigin(origins = "*")

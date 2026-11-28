@@ -17,9 +17,10 @@ public class Cuestionario {
     @JoinColumn(name = "candidato_id", nullable = false)
     private Candidato candidato;
 
+    /** evaluación (CU025) a la que pertenece, de ahí saca el puesto y el modelo de preguntas */
     @ManyToOne(fetch = FetchType.EAGER, optional = false)
-    @JoinColumn(name = "puesto_id", nullable = false)
-    private Puesto puesto;
+    @JoinColumn(name = "evaluacion_id", nullable = false)
+    private Evaluacion evaluacion;
 
     @Column(name = "clave_acceso", nullable = false, length = 8)
     private String claveAcceso;
@@ -59,8 +60,10 @@ public class Cuestionario {
     public void setId(Long id) { this.id = id; }
     public Candidato getCandidato() { return candidato; }
     public void setCandidato(Candidato candidato) { this.candidato = candidato; }
-    public Puesto getPuesto() { return puesto; }
-    public void setPuesto(Puesto puesto) { this.puesto = puesto; }
+    public Evaluacion getEvaluacion() { return evaluacion; }
+    public void setEvaluacion(Evaluacion evaluacion) { this.evaluacion = evaluacion; }
+    /** el puesto es el de su evaluación */
+    public Puesto getPuesto() { return evaluacion == null ? null : evaluacion.getPuesto(); }
     public String getClaveAcceso() { return claveAcceso; }
     public void setClaveAcceso(String claveAcceso) { this.claveAcceso = claveAcceso; }
     public String getEstado() { return estado; }
