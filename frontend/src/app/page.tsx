@@ -28,7 +28,7 @@ export default function IngresoPage() {
   const [enviando, setEnviando] = useState(false);
   const primerCampo = useRef<HTMLInputElement>(null);
 
-  // Si ya hay una sesión abierta, se retoma.
+  // si ya hay una sesión abierta se retoma
   useEffect(() => {
     if (consultor) router.replace('/inicio');
     else if (candidato) router.replace('/cuestionario');
@@ -66,7 +66,7 @@ export default function IngresoPage() {
         router.replace('/cuestionario');
       }
     } catch (err) {
-      // 5.A / 3.A.2: se muestra el error, se blanquean los campos y se vuelve a pedir el ingreso.
+      // se muestra el error, se limpian los campos y se vuelve a pedir el ingreso
       if (err instanceof ApiError && !err.sinConexion) {
         await avisos.abrir({ tipo: 'error', titulo: 'No se pudo ingresar', mensaje: err.message });
         blanquear();

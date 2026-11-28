@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-/** Bloque de datos del encabezado de un reporte ("Función", "Evaluación", "Candidato"). */
+/** datos del encabezado de un reporte ("Función", "Evaluación", "Candidato") */
 export function BloqueDatos({ titulo, filas }: { titulo: string; filas: [string, ReactNode][] }) {
   return (
     <section className="border-t-2 border-tinta pt-2">

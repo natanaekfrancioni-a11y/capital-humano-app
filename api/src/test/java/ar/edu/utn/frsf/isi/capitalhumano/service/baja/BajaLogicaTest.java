@@ -18,17 +18,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-/**
- * Patrón Template Method: el método plantilla {@code ejecutar} fija el orden de los pasos de toda baja
- * lógica. Se prueba con una baja "de juguete" que anota cada paso que ejecuta.
- */
+/** patrón Template Method: se prueba con una baja de prueba que anota lo que va ejecutando */
 @ExtendWith(MockitoExtension.class)
 class BajaLogicaTest {
 
     @Mock
     private AuditoriaEliminacionDao auditoriaDao;
 
-    /** Elemento mínimo para la prueba. */
+    /** elemento mínimo para la prueba */
     static final class Elemento {
         final long id;
         boolean activo;
@@ -39,7 +36,7 @@ class BajaLogicaTest {
         }
     }
 
-    /** Subclase concreta: solo completa los pasos variables y registra el orden en que se llaman. */
+    /** subclase concreta que anota el orden en que se llaman los métodos */
     static final class BajaDePrueba extends BajaLogica<Elemento> {
         final List<String> pasos = new ArrayList<>();
         final Elemento elemento;
@@ -104,7 +101,7 @@ class BajaLogicaTest {
 
     @Test
     void ganchosPorDefecto_permitenEliminarYNoTienenAsociados() {
-        // BajaPregunta no redefine los ganchos: usa los de la clase base.
+        // BajaPregunta no redefine los ganchos, usa los de la clase base
         BajaPregunta baja = new BajaPregunta(null, auditoriaDao);
 
         assertEquals(Optional.empty(), baja.motivoPorElQueNoSePuedeEliminar(null));

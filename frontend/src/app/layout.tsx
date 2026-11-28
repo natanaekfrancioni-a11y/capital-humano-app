@@ -4,7 +4,7 @@ import localFont from 'next/font/local';
 import './globals.css';
 import { DialogoProvider } from '@/components/ui/Dialogo';
 
-// Atkinson Hyperlegible Next (SIL OFL 1.1): diseñada para leerse fácil, también contra reloj.
+// fuente Atkinson Hyperlegible Next (SIL OFL 1.1), se lee fácil incluso contra reloj
 const atkinson = localFont({
   src: '../fonts/atkinson-hyperlegible-next-latin-wght-normal.woff2',
   weight: '200 800',

@@ -41,7 +41,7 @@ export function IconoUsuario(props: Props) {
   );
 }
 
-/** Validación de datos: círculo con guion */
+/** validación de datos: círculo con guion */
 export function IconoValidacion(props: Props) {
   return (
     <svg {...base} {...props}>
@@ -51,7 +51,7 @@ export function IconoValidacion(props: Props) {
   );
 }
 
-/** Mensaje de error: círculo con cruz */
+/** mensaje de error: círculo con cruz */
 export function IconoError(props: Props) {
   return (
     <svg {...base} {...props}>
@@ -61,7 +61,7 @@ export function IconoError(props: Props) {
   );
 }
 
-/** Informativa: círculo con tilde */
+/** informativa: círculo con tilde */
 export function IconoInformativa(props: Props) {
   return (
     <svg {...base} {...props}>
@@ -71,7 +71,7 @@ export function IconoInformativa(props: Props) {
   );
 }
 
-/** Confirmación: círculo con signo de pregunta */
+/** confirmación: círculo con signo de pregunta */
 export function IconoConfirmacion(props: Props) {
   return (
     <svg {...base} {...props}>

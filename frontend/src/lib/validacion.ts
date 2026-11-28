@@ -1,4 +1,4 @@
-/** Validaciones de formulario de las altas (flujos alternativos 2.A y 2.B). */
+/** validaciones de los formularios de alta */
 
 export interface Regla {
   campo: string;
@@ -10,9 +10,9 @@ export interface Regla {
 export interface ResultadoValidacion {
   omitidos: string[];
   excedidos: string[];
-  /** Error por campo, para marcarlo debajo del control. */
+  /** error por campo, para marcarlo debajo del control */
   porCampo: Record<string, string>;
-  /** Mensajes para el aviso de arriba del formulario. */
+  /** mensajes para el aviso de arriba del formulario */
   mensajes: string[];
 }
 

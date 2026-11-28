@@ -19,7 +19,7 @@ import type {
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
 
-/** Error de la API: `mensaje` es el texto principal y `detalles` la lista que arma el backend. */
+/** error de la API: mensaje es el texto principal y detalles la lista que arma el backend */
 export class ApiError extends Error {
   readonly detalles: string[];
   readonly status: number;
@@ -81,14 +81,14 @@ export const api = {
   ingresarCandidato: (tipoDocumento: string, nroDocumento: string, clave: string) =>
     pedir<SesionCandidato>('POST', '/api/auth/candidato', { cuerpo: { tipoDocumento, nroDocumento, clave } }),
 
-  // Combos del CU020 y del CU021: competencias, factores y opciones de respuesta
+  // combos del CU020 y del CU021: competencias, factores y opciones de respuesta
   buscarCompetencias: (nombre?: string) => pedir<Competencia[]>('GET', '/api/catalogo/competencias', { consulta: { nombre } }),
   buscarFactores: (competenciaId?: number | null, nombre?: string) =>
     pedir<Factor[]>('GET', '/api/catalogo/factores', { consulta: { competenciaId, nombre } }),
   buscarOpcionesRespuesta: (nombre?: string) =>
     pedir<OpcionRespuesta[]>('GET', '/api/catalogo/opciones-respuesta', { consulta: { nombre } }),
 
-  // Puestos para elegir en el CU025 (paso 8)
+  // puestos para elegir en el CU025
   buscarPuestos: (filtros: { codigo?: string; nombre?: string; empresa?: string } = {}) =>
     pedir<Puesto[]>('GET', '/api/catalogo/puestos', { consulta: filtros }),
 

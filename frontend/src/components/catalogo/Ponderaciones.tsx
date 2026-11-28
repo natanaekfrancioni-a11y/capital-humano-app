@@ -17,10 +17,7 @@ export function sumaPonderaciones(valores: Record<number, string>): number {
   }, 0);
 }
 
-/**
- * Grilla de la opción de respuesta elegida: Orden y Descripción de solo lectura,
- * Ponderación editable. Las ponderaciones son 0 o positivas y suman 10 (CU021).
- */
+/** grilla de la opción de respuesta elegida, solo se edita la ponderación (0 o positivas y suman 10) */
 export function Ponderaciones({ detalles, valores, alCambiar, error }: Props) {
   const suma = sumaPonderaciones(valores);
   const exacta = Math.abs(suma - 10) < 0.005;

@@ -1,6 +1,6 @@
 package ar.edu.utn.frsf.isi.capitalhumano.service.estado;
 
-/** INCOMPLETO: se superó el tiempo máximo o la cantidad de accesos sin terminar. Es final. */
+/** INCOMPLETO: se pasó del tiempo máximo o de los accesos sin terminar, es final */
 public class EstadoIncompleto extends EstadoBase {
 
     @Override

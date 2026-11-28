@@ -13,10 +13,7 @@ interface Props {
   alGuardar: (carpeta: ManejadorCarpeta | null, nombreArchivo: string) => Promise<void>;
 }
 
-/**
- * CU025 pasos 15 y 16: pantalla para elegir la carpeta y guardar el Excel.
- * En Chrome/Edge se usa el selector de carpetas del sistema; en otros navegadores, la descarga.
- */
+/** CU025: pantalla para elegir la carpeta y guardar el Excel (en navegadores sin selector se descarga) */
 export function GuardarArchivo({ abierto, nombreInicial, alCancelar, alGuardar }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const [carpeta, setCarpeta] = useState<ManejadorCarpeta | null>(null);

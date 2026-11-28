@@ -5,7 +5,7 @@ import ar.edu.utn.frsf.isi.capitalhumano.dao.PreguntaDao;
 import ar.edu.utn.frsf.isi.capitalhumano.model.Pregunta;
 import java.util.Optional;
 
-/** CU023 - Dar de baja pregunta. Usa los ganchos por defecto: no verifica uso ni tiene bajas asociadas. */
+/** CU023 - Dar de baja pregunta, usa los ganchos por defecto (no verifica uso ni tiene bajas asociadas) */
 public class BajaPregunta extends BajaLogica<Pregunta> {
 
     private final PreguntaDao preguntaDao;

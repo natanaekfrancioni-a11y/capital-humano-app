@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** CU028 - Emitir orden de mérito. */
+/** CU028 - Emitir orden de mérito */
 @RestController
 @RequestMapping("/api/reportes")
 @CrossOrigin(origins = "*")
@@ -25,7 +25,7 @@ public class ReporteController {
         this.reporteService = reporteService;
     }
 
-    /** CU028 paso 4: puestos con cantidad de candidatos y de evaluaciones completas. */
+    /** puestos con la cantidad de candidatos y de evaluaciones completas */
     @GetMapping("/puestos")
     public ResponseEntity<List<PuestoResumenDTO>> buscarPuestos(
             @RequestParam(required = false) String codigo,
@@ -34,17 +34,17 @@ public class ReporteController {
         return ResponseEntity.ok(reporteService.buscarPuestos(codigo, nombre, empresa));
     }
 
-    /** CU028 paso 6: evaluaciones del puesto (EVA-001, EVA-002, ...). */
+    /** evaluaciones del puesto (EVA-001, EVA-002, ...) */
     @GetMapping("/puestos/{puestoId}/evaluaciones")
     public ResponseEntity<EvaluacionesPuestoDTO> evaluaciones(@PathVariable Long puestoId) {
         return ResponseEntity.ok(reporteService.listarEvaluaciones(puestoId));
     }
 
-    /** CU028 paso 7: evaluacion = TODAS o el código de una evaluación (EVA-001). */
+    /** evaluacion puede ser TODAS o uno o más códigos separados por coma (EVA-001,EVA-003) */
     @GetMapping("/orden-merito")
     public ResponseEntity<ReporteOrdenMeritoDTO> ordenDeMerito(
             @RequestParam Long puestoId,
-            @RequestParam(defaultValue = ReporteService.TODAS) String evaluacion,
+            @RequestParam(defaultValue = ReporteService.TODAS) List<String> evaluacion,
             @RequestParam(required = false) String emitidoPor) {
         return ResponseEntity.ok(reporteService.emitirOrdenDeMerito(puestoId, evaluacion, emitidoPor));
     }

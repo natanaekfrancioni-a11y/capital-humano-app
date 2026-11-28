@@ -56,7 +56,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
             </plugin>
-            <!-- Cobertura de los tests: "mvn test" deja el informe en target/site/jacoco/index.html -->
+            <!-- cobertura de los tests: mvn test deja el informe en target/site/jacoco/index.html -->
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>

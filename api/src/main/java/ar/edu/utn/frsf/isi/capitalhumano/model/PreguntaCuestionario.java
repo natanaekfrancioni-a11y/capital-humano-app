@@ -1,8 +1,10 @@
 package ar.edu.utn.frsf.isi.capitalhumano.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 
+/** pregunta sorteada para un cuestionario (CU026) con su bloque y su orden en pantalla */
 @Entity
 @Table(name = "pregunta_cuestionario")
 public class PreguntaCuestionario {
@@ -15,17 +17,11 @@ public class PreguntaCuestionario {
     @JoinColumn(name = "cuestionario_id", nullable = false)
     private Cuestionario cuestionario;
 
+    /** pregunta del modelo congelado de la evaluación, no la del catálogo */
+    @JsonProperty("pregunta")
     @ManyToOne(fetch = FetchType.EAGER, optional = false)
-    @JoinColumn(name = "pregunta_id", nullable = false)
-    private Pregunta pregunta;
-
-    @ManyToOne(fetch = FetchType.EAGER, optional = false)
-    @JoinColumn(name = "factor_id", nullable = false)
-    private Factor factor;
-
-    @ManyToOne(fetch = FetchType.EAGER, optional = false)
-    @JoinColumn(name = "competencia_id", nullable = false)
-    private Competencia competencia;
+    @JoinColumn(name = "pregunta_evaluacion_id", nullable = false)
+    private PreguntaEvaluacion preguntaEvaluacion;
 
     @Column(name = "nro_bloque", nullable = false)
     private Integer nroBloque;
@@ -36,16 +32,18 @@ public class PreguntaCuestionario {
     @Column(nullable = false)
     private boolean respondida = false;
 
+    @JsonIgnore
+    public Factor getFactor() { return preguntaEvaluacion.getFactor(); }
+
+    @JsonIgnore
+    public Competencia getCompetencia() { return preguntaEvaluacion.getCompetencia(); }
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public Cuestionario getCuestionario() { return cuestionario; }
     public void setCuestionario(Cuestionario cuestionario) { this.cuestionario = cuestionario; }
-    public Pregunta getPregunta() { return pregunta; }
-    public void setPregunta(Pregunta pregunta) { this.pregunta = pregunta; }
-    public Factor getFactor() { return factor; }
-    public void setFactor(Factor factor) { this.factor = factor; }
-    public Competencia getCompetencia() { return competencia; }
-    public void setCompetencia(Competencia competencia) { this.competencia = competencia; }
+    public PreguntaEvaluacion getPreguntaEvaluacion() { return preguntaEvaluacion; }
+    public void setPreguntaEvaluacion(PreguntaEvaluacion preguntaEvaluacion) { this.preguntaEvaluacion = preguntaEvaluacion; }
     public Integer getNroBloque() { return nroBloque; }
     public void setNroBloque(Integer nroBloque) { this.nroBloque = nroBloque; }
     public Integer getOrdenVisual() { return ordenVisual; }

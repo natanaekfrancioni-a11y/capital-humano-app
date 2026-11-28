@@ -2,14 +2,14 @@ import type { CandidatoClave } from './tipos';
 
 const dos = (n: number) => String(n).padStart(2, '0');
 
-/** Requerimiento especial CU025: aaaa-mm-dd-hh-mm-NombreFunción (sin caracteres inválidos en Windows). */
+/** nombre del archivo del CU025: aaaa-mm-dd-hh-mm-NombreFunción (sin caracteres inválidos en Windows) */
 export function nombreArchivoClaves(nombreFuncion: string, fecha = new Date()): string {
   const marca = `${fecha.getFullYear()}-${dos(fecha.getMonth() + 1)}-${dos(fecha.getDate())}-${dos(fecha.getHours())}-${dos(fecha.getMinutes())}`;
   const funcion = nombreFuncion.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
   return `${marca}-${funcion}`;
 }
 
-/** Genera el .xls (formato Excel 97-2003) con la lista de candidatos y sus claves de ingreso. */
+/** genera el .xls (Excel 97-2003) con la lista de candidatos y sus claves de ingreso */
 export async function libroClaves(
   candidatos: CandidatoClave[],
   puesto: { nombre: string; empresa: string },
@@ -30,7 +30,7 @@ export async function libroClaves(
   return new Blob([datos], { type: 'application/vnd.ms-excel' });
 }
 
-// File System Access API (Chrome y Edge): permite elegir la carpeta donde guardar.
+// File System Access API (Chrome y Edge): permite elegir la carpeta donde guardar
 export interface ManejadorCarpeta {
   name: string;
   getFileHandle(
@@ -45,7 +45,7 @@ export function puedeElegirCarpeta(): boolean {
   return typeof window !== 'undefined' && typeof (window as unknown as VentanaConCarpetas).showDirectoryPicker === 'function';
 }
 
-/** Abre el selector de carpetas del sistema operativo. Devuelve null si el usuario lo cancela. */
+/** abre el selector de carpetas del sistema, devuelve null si el usuario lo cancela */
 export async function elegirCarpeta(): Promise<ManejadorCarpeta | null> {
   const ventana = window as unknown as VentanaConCarpetas;
   if (!ventana.showDirectoryPicker) return null;
@@ -63,7 +63,7 @@ export async function guardarEnCarpeta(carpeta: ManejadorCarpeta, nombreArchivo:
   await escritura.close();
 }
 
-/** Alternativa para navegadores sin selector de carpetas: descarga el archivo. */
+/** para navegadores sin selector de carpetas: descarga el archivo */
 export function descargar(nombreArchivo: string, datos: Blob) {
   const url = URL.createObjectURL(datos);
   const a = document.createElement('a');

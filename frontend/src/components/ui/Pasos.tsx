@@ -1,4 +1,4 @@
-/** Indicador de pasos de un asistente (CU025): cada paso es un círculo numerado de la hoja de respuestas. */
+/** indicador del asistente del CU025: un círculo numerado por pantalla */
 export function Pasos({ pasos, actual }: { pasos: string[]; actual: number }) {
   return (
     <ol className="mb-8 flex flex-wrap items-center gap-x-3 gap-y-2" aria-label="Pasos">

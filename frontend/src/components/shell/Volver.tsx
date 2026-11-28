@@ -7,13 +7,13 @@ type Accion = () => void;
 interface ControlVolver {
   registrar: (accion: Accion) => void;
   quitar: (accion: Accion) => void;
-  /** Devuelve la acción registrada por la pantalla actual, si hay una. */
+  /** devuelve la acción registrada por la pantalla actual, si hay una */
   actual: () => Accion | null;
 }
 
 const VolverContexto = createContext<ControlVolver | null>(null);
 
-/** Permite que una pantalla defina qué hace la flecha "Volver" de la barra superior. */
+/** deja que una pantalla defina qué hace la flecha "Volver" de la barra de arriba */
 export function VolverProvider({ children }: { children: ReactNode }) {
   const registrada = useRef<Accion | null>(null);
   const control = useMemo<ControlVolver>(
@@ -35,7 +35,7 @@ export function useControlVolver() {
   return useContext(VolverContexto);
 }
 
-/** Mientras la pantalla está montada, "Volver" ejecuta `accion` (por ejemplo, salir del alta a la gestión). */
+/** mientras la pantalla está montada "Volver" ejecuta accion (por ejemplo salir del alta a la gestión) */
 export function useVolver(accion: Accion) {
   const control = useContext(VolverContexto);
   useEffect(() => {

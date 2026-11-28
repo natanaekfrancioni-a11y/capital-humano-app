@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** CU033 - Generar pregunta con Inteligencia Artificial. */
+/** CU033 - Generar pregunta con Inteligencia Artificial */
 @RestController
 @RequestMapping("/api/catalogo/preguntas")
 @CrossOrigin(origins = "*")
@@ -23,7 +23,7 @@ public class PreguntaIAController {
 
     public record GenerarPreguntaRequest(Long competenciaId, Long factorId) {}
 
-    /** Devuelve los datos de una pregunta nueva para completar el alta (CU021). No guarda nada. */
+    /** devuelve los datos de una pregunta nueva para completar el alta (CU021), no guarda nada */
     @PostMapping("/generar-ia")
     public ResponseEntity<PreguntaGeneradaDTO> generar(@RequestBody GenerarPreguntaRequest req) {
         return ResponseEntity.ok(generador.generar(req.competenciaId(), req.factorId()));

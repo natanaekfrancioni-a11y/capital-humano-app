@@ -2,7 +2,7 @@ import type { ReactNode, Ref } from 'react';
 
 interface HojaProps {
   titulo: string;
-  /** Caso de uso que resuelve la pantalla (trazabilidad con la especificación). */
+  /** caso de uso que resuelve la pantalla */
   cu?: string;
   bajada?: ReactNode;
   children: ReactNode;
@@ -10,7 +10,7 @@ interface HojaProps {
   ancho?: 'normal' | 'angosto';
 }
 
-/** La hoja de trabajo de cada pantalla: papel blanco con el encabezado de formulario. */
+/** hoja de cada pantalla con el encabezado de formulario */
 export function Hoja({ titulo, cu, bajada, children, className = '', ancho = 'normal' }: HojaProps) {
   return (
     <section
@@ -30,7 +30,7 @@ export function Hoja({ titulo, cu, bajada, children, className = '', ancho = 'no
   );
 }
 
-/** Botones al pie de la hoja: secundarios a la izquierda y el principal a la derecha. */
+/** botones al pie de la hoja: secundarios a la izquierda y el principal a la derecha */
 export function BarraAcciones({ izquierda, derecha }: { izquierda?: ReactNode; derecha?: ReactNode }) {
   return (
     <div className="no-imprimir mt-7 flex flex-wrap items-center justify-between gap-3 border-t border-linea pt-5">
@@ -40,11 +40,7 @@ export function BarraAcciones({ izquierda, derecha }: { izquierda?: ReactNode; d
   );
 }
 
-/**
- * Subtítulo de sección dentro de una hoja.
- * min-w-0: dentro de una grilla, la sección puede achicarse y la tabla se desplaza dentro de su marco
- * en lugar de ensanchar la página en el celular.
- */
+/** sección dentro de una hoja, con min-w-0 la tabla se desplaza en vez de ensanchar la página en el celular */
 export function Seccion({ titulo, children, accion }: { titulo: string; children: ReactNode; accion?: ReactNode }) {
   return (
     <section className="min-w-0">
@@ -57,10 +53,7 @@ export function Seccion({ titulo, children, accion }: { titulo: string; children
   );
 }
 
-/**
- * Errores de validación del formulario: van en el flujo de la página, arriba del formulario,
- * "sin tapar campos ni botones" (flujo alternativo 2.A de las altas).
- */
+/** errores de validación arriba del formulario, sin tapar campos ni botones */
 export function AvisoErrores({
   titulo,
   items = [],
@@ -90,7 +83,7 @@ export function AvisoErrores({
   );
 }
 
-/** Estado del aviso de errores de un formulario, con foco al aviso para lectores de pantalla. */
+/** estado del aviso de errores de un formulario, con foco en el aviso para lectores de pantalla */
 export interface ErroresFormulario {
   titulo: string;
   items: string[];

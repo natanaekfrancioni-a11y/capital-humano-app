@@ -6,7 +6,7 @@ import ar.edu.utn.frsf.isi.capitalhumano.model.Cuestionario;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/** EN_PROCESO: el candidato ya empezó y puede seguir respondiendo bloques. */
+/** EN_PROCESO: el candidato ya empezó y puede seguir respondiendo bloques */
 public class EstadoEnProceso extends EstadoBase {
 
     @Override
@@ -14,7 +14,7 @@ public class EstadoEnProceso extends EstadoBase {
         return "EN_PROCESO";
     }
 
-    /** CU026 1.A (tiempo máximo) y precondición de cantidad máxima de accesos: si se superan, queda INCOMPLETO. */
+    /** CU026: si se pasa del tiempo máximo o de la cantidad de accesos queda INCOMPLETO */
     @Override
     public void verificarVigencia(Cuestionario cuestionario, ConfiguracionCuestionario configuracion,
                                   LocalDateTime ahora, boolean esNuevoIngreso) {
@@ -32,7 +32,7 @@ public class EstadoEnProceso extends EstadoBase {
         }
     }
 
-    /** Vuelve a entrar para continuar donde dejó: solo se cuenta el acceso. */
+    /** vuelve a entrar para seguir donde dejó, solo se cuenta el acceso */
     @Override
     public void registrarIngreso(Cuestionario cuestionario, LocalDateTime ahora) {
         contarAcceso(cuestionario, ahora);
@@ -40,7 +40,7 @@ public class EstadoEnProceso extends EstadoBase {
 
     @Override
     public void validarQueAdmiteRespuestas(Cuestionario cuestionario) {
-        // En proceso se pueden responder bloques.
+        // en proceso se pueden responder bloques
     }
 
     @Override

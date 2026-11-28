@@ -14,7 +14,7 @@ import { ApiError } from '@/lib/api';
 import { Boton } from './Boton';
 import { IconoConfirmacion, IconoError, IconoInformativa, IconoValidacion } from './Iconos';
 
-/** Los cuatro mensajes emergentes del diseño de entradas y salidas (etapa 1). */
+/** los cuatro mensajes emergentes del diseño de entradas y salidas (etapa 1) */
 export type TipoDialogo = 'validacion' | 'error' | 'informativa' | 'confirmacion';
 
 export interface OpcionesDialogo {
@@ -22,12 +22,12 @@ export interface OpcionesDialogo {
   titulo: string;
   mensaje?: ReactNode;
   detalles?: string[];
-  /** Texto del botón principal (por defecto "Aceptar"). */
+  /** texto del botón principal (por defecto "Aceptar") */
   aceptar?: string;
-  /** Si se indica, se muestra un segundo botón que resuelve `false`. */
+  /** si se indica se muestra un segundo botón que devuelve false */
   rechazar?: string;
   peligro?: boolean;
-  /** "Presione cualquier tecla para continuar": cualquier tecla cierra el mensaje. */
+  /** "Presione cualquier tecla para continuar": cualquier tecla cierra el mensaje */
   cualquierTecla?: boolean;
 }
 
@@ -149,7 +149,7 @@ export function DialogoProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** Atajos para los cuatro mensajes emergentes. Todos devuelven una promesa. */
+/** atajos para los cuatro mensajes emergentes, todos devuelven una promesa */
 export function useAvisos() {
   const abrir = useContext(DialogoContexto);
   if (!abrir) throw new Error('useAvisos debe usarse dentro de DialogoProvider');
@@ -174,7 +174,7 @@ export function useAvisos() {
           rechazar: extra.rechazar ?? 'Cancelar',
           peligro: extra.peligro,
         }),
-      /** Muestra el error de la API (mensaje + detalles). Con `reintentar` devuelve true si eligió Reintentar. */
+      /** muestra el error de la API (mensaje y detalles), con reintentar devuelve true si eligió Reintentar */
       error: (e: unknown, titulo = 'No se pudo completar la operación', reintentar = false) =>
         abrir({
           tipo: 'error',

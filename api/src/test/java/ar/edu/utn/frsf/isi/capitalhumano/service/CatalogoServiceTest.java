@@ -39,10 +39,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-/**
- * Preguntas (CU020 a CU023) y las búsquedas de competencias, factores, opciones de respuesta y puestos
- * que usan el alta de pregunta y el CU025. La baja pasa por la clase del patrón Template Method.
- */
+/** preguntas (CU020 a CU023) y búsquedas de competencias, factores, opciones de respuesta y puestos */
 @ExtendWith(MockitoExtension.class)
 class CatalogoServiceTest {
 
@@ -67,7 +64,7 @@ class CatalogoServiceTest {
     @InjectMocks
     private CatalogoService service;
 
-    // ------------------------------------------------------------------ datos de prueba
+    // datos de prueba
 
     private final Competencia gp = Datos.competencia(1L, "COMP-GP", "GESTION DE PROYECTOS");
     private final Competencia le = Datos.competencia(2L, "COMP-LE", "LEALTAD");
@@ -111,7 +108,7 @@ class CatalogoServiceTest {
         return m;
     }
 
-    // ================================================================== COMPETENCIAS
+    // competencias
 
     @Test
     void buscarCompetencias_sinNombreTraeLasActivas_conNombreFiltra() {
@@ -123,7 +120,7 @@ class CatalogoServiceTest {
         assertEquals(List.of(le), service.buscarCompetencias(" lea "));
     }
 
-    // ================================================================== FACTORES
+    // factores
 
     @Test
     void buscarFactores_deUnaCompetencia_filtraPorNombreYOrdena() {
@@ -140,7 +137,7 @@ class CatalogoServiceTest {
         assertEquals(List.of(comunicacion, planificacion), service.buscarFactores(null, ""));
     }
 
-    // ================================================================== OPCIONES DE RESPUESTA
+    // opciones de respuesta
 
     @Test
     void buscarOpcionesRespuesta_sinNombreTraeLasActivas_conNombreFiltra() {
@@ -155,7 +152,7 @@ class CatalogoServiceTest {
         return op.getDetalles().stream().map(d -> d.getNroOrden() + ":" + d.getDescripcion()).collect(Collectors.joining(","));
     }
 
-    // ================================================================== PREGUNTAS
+    // preguntas
 
     @Test
     void buscarPreguntas_filtraPorFactorCompetenciaYNombre() {
@@ -196,7 +193,7 @@ class CatalogoServiceTest {
 
         Pregunta p = service.crearPregunta(11L, 2L, null, "FRECUENCIA DE REVISION", "¿CON QUÉ FRECUENCIA REVISA EL PLAN?", null, null);
 
-        // El 03 ya estaba tomado: se usa el siguiente libre.
+        // el 03 ya estaba tomado, se usa el siguiente libre
         assertEquals("PREG-GP-01-04", p.getCodigo());
         assertNull(p.getDescripcion());
         assertEquals(new BigDecimal("3.33"), p.getPonderacionesPorDetalle().get(21L));
@@ -344,7 +341,7 @@ class CatalogoServiceTest {
         assertEquals("Baja lógica de pregunta", auditoria.getDetalle());
     }
 
-    // ================================================================== PUESTOS
+    // puestos
 
     @Test
     void buscarPuestos_filtraPorCodigoNombreYEmpresa() {
