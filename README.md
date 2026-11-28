@@ -89,7 +89,7 @@ Queda en `http://localhost:3000`. Si el backend corre en otro host o puerto, cre
 | ----- | ----- | 
 | Ingresar como consultor | Usuario `CONSULTOR1` (o `NFRANCIONI`), cualquier contraseña (validación LDAP simulada en local) | 
 | Completar cuestionario | DNI `35111222`, clave `A8K3M9P2` (cuestionario activo de `PEREZ` para `PROJECT MANAGER TIC`) | 
-| Orden de mérito | Puesto `PUE-PM-01`: `SOSA` cumple mínimos (4,75), `GUTIERREZ` no alcanza el mínimo de `LEALTAD` (3,25), `PEREZ` está activo | 
+| Orden de mérito | Puesto `PUE-PM-01`, evaluación `EVA-001`: `SOSA` cumple mínimos (4,75), `GUTIERREZ` no alcanza el mínimo de `LEALTAD` (3,25), `PEREZ` está activo | 
 
 Hay 3 preguntas por factor (incluyendo ejemplos del enunciado y de Arquitectura de Software) para que en cada cuestionario se sorteen 2 distintas. Cada pregunta usa la opción de respuesta correspondiente (verdadero/falso, escala de valoración, frecuencia o frases propias como en `LEALTAD`).
 
@@ -147,9 +147,9 @@ Los errores de negocio devuelven `400` con `{ "error": "...", "detalles": ["..."
 | CU026 | `POST /api/evaluaciones/cuestionarios/{id}/bloques/{nroBloque}/responder` `{ respuestas }` | 
 | CU028 | `GET /api/reportes/puestos?codigo=&nombre=&empresa=` | 
 | CU028 | `GET /api/reportes/puestos/{puestoId}/evaluaciones` | 
-| CU028 | `GET /api/reportes/orden-merito?puestoId=&evaluacion=TODAS&emitidoPor=` | 
+| CU028 | `GET /api/reportes/orden-merito?puestoId=&evaluacion=TODAS&emitidoPor=` (`evaluacion` acepta también uno o más códigos: `EVA-001,EVA-002`) | 
 
-Las evaluaciones creadas en conjunto en CU025 para un puesto comparten fecha de creación y se identifican como `EVA-001`, `EVA-002`, etc.
+Una **evaluación** es la que genera el CU025 al presionar Finalizar (tabla `evaluacion`): agrupa los cuestionarios creados en ese momento y se numera dentro del puesto (`EVA-001`, `EVA-002`, ...). Al generarse guarda una copia de las preguntas que se pueden sortear, con su texto y la ponderación de cada opción (tablas `pregunta_evaluacion` y `ponderacion_evaluacion`). Todos sus cuestionarios se arman con ese modelo aunque después se modifique el catálogo de preguntas, como pide el requerimiento especial del CU025.
 
 ## Interfaz y estilos
 
